@@ -1,0 +1,3 @@
+task: "google_graphqa_connected_nodes"
+dataset_name: connected_nodes
+include: _default_template_yaml

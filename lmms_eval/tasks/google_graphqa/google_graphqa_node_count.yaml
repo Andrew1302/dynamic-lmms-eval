@@ -1,0 +1,3 @@
+task: "google_graphqa_node_count"
+dataset_name: node_count
+include: _default_template_yaml

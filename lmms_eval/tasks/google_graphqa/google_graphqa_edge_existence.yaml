@@ -1,0 +1,3 @@
+task: "google_graphqa_edge_existence"
+dataset_name: edge_existence
+include: _default_template_yaml

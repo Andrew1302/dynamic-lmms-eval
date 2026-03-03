@@ -1,0 +1,3 @@
+task: "google_graphqa_maximum_flow"
+dataset_name: maximum_flow
+include: _default_template_yaml

@@ -1,0 +1,14 @@
+group: google_graphqa
+task:
+  - google_graphqa_connected_nodes
+  - google_graphqa_cycle_check
+  - google_graphqa_disconnected_nodes
+  - google_graphqa_edge_count
+  - google_graphqa_edge_existence
+  - google_graphqa_maximum_flow
+  - google_graphqa_node_classification
+  - google_graphqa_node_count
+  - google_graphqa_node_degree
+  - google_graphqa_reachability
+  - google_graphqa_shortest_path
+  - google_graphqa_triangle_counting

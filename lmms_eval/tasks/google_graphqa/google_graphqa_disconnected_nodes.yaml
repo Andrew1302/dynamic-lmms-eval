@@ -1,0 +1,3 @@
+task: "google_graphqa_disconnected_nodes"
+dataset_name: disconnected_nodes
+include: _default_template_yaml

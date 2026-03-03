@@ -1,0 +1,3 @@
+task: "google_graphqa_shortest_path"
+dataset_name: shortest_path
+include: _default_template_yaml

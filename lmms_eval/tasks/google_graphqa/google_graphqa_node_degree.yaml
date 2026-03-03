@@ -1,0 +1,3 @@
+task: "google_graphqa_node_degree"
+dataset_name: node_degree
+include: _default_template_yaml
