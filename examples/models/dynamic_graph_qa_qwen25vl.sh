@@ -20,7 +20,7 @@ python tools/prepare_dynamic_graph_qa.py \
 # Step 2 (optional): smoke test — first 8 samples only, no GPU required
 # python -m lmms_eval \
 #     --model qwen2_5_vl \
-#     --model_args pretrained=Qwen/Qwen2.5-VL-7B-Instruct,max_pixels=12845056,attn_implementation=flash_attention_2 \
+#     --model_args pretrained=Qwen/Qwen2.5-VL-7B-Instruct,max_pixels=12845056 \
 #     --tasks dynamic_graph_qa \
 #     --batch_size 1 \
 #     --limit 8
@@ -28,7 +28,7 @@ python tools/prepare_dynamic_graph_qa.py \
 # Step 3: full evaluation
 accelerate launch --num_processes=1 --main_process_port=12346 -m lmms_eval \
     --model qwen2_5_vl \
-    --model_args pretrained=Qwen/Qwen2.5-VL-7B-Instruct,max_pixels=12845056,attn_implementation=flash_attention_2 \
+    --model_args pretrained=Qwen/Qwen2.5-VL-7B-Instruct,max_pixels=12845056 \
     --tasks dynamic_graph_qa \
     --batch_size 1 \
     --log_samples \
