@@ -9,6 +9,9 @@ env
 venv
 .venv
 
+results
+
+
 # Build artifacts
 build
 dist

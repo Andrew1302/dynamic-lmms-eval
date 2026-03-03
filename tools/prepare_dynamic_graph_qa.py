@@ -2,8 +2,8 @@
 
 Run from the dynamic-lmms-eval repo root:
     python tools/prepare_dynamic_graph_qa.py
-    python tools/prepare_dynamic_graph_qa.py --num-samples 280 --size medium --seed 0
-    python tools/prepare_dynamic_graph_qa.py --tasks node_count cycle_check shortest_path
+    python tools/prepare_dynamic_graph_qa.py --num-samples 280 --size all --seed 0
+    python tools/prepare_dynamic_graph_qa.py --size medium --tasks node_count cycle_check shortest_path
 
 The script expects the dynamic-dataset sibling repo at ../dynamic-dataset relative to
 the repo root (i.e. C:/Users/Andrew/Msc/dynamic-dataset).
@@ -67,7 +67,7 @@ def _make_graph(task_name: str, size: str):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prepare Dynamic Graph QA dataset for lmms-eval")
     parser.add_argument("--num-samples", type=int, default=140, help="Total number of samples to generate (default: 140 = 10 per task)")
-    parser.add_argument("--size", choices=["small", "medium", "large"], default="small", help="Graph size preset (default: small, 5-9 nodes)")
+    parser.add_argument("--size", choices=["small", "medium", "large", "all"], default="all", help="Graph size preset (default: all — picks randomly among small/medium/large per sample)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility (default: 42)")
     parser.add_argument("--output-dir", type=str, default="./dynamic_graph_qa_data", help="Output directory for the saved HuggingFace dataset (default: ./dynamic_graph_qa_data)")
     parser.add_argument("--tasks", nargs="+", default=None, help="Task names to include (default: all 14 tasks)")
@@ -87,7 +87,8 @@ def main() -> None:
         sys.exit(f"[prepare_dynamic_graph_qa] Unknown tasks: {unknown}. Available: {list(all_tasks.keys())}")
 
     print(f"[prepare_dynamic_graph_qa] Generating {args.num_samples} samples across tasks: {task_names}")
-    print(f"[prepare_dynamic_graph_qa] Graph size: {args.size}, seed: {args.seed}")
+    size_desc = "all (random per sample)" if args.size == "all" else args.size
+    print(f"[prepare_dynamic_graph_qa] Graph size: {size_desc}, seed: {args.seed}")
 
     rows = []
     for i in range(args.num_samples):
@@ -127,6 +128,20 @@ def main() -> None:
     dataset_dict.save_to_disk(str(output_dir))
     print(f"[prepare_dynamic_graph_qa] Saved to {output_dir.resolve()}")
     print(f"[prepare_dynamic_graph_qa] Split 'test' has {len(ds)} samples.")
+
+    # Export images as PNGs in doc_id order, overwriting any previous export
+    import shutil
+
+    images_dir = output_dir.parent / "dynamic_graph_qa_images"
+    if images_dir.exists():
+        shutil.rmtree(images_dir)
+    images_dir.mkdir(parents=True)
+
+    for row in rows:
+        fname = images_dir / f"{row['id']:03d}_{row['task']}.png"
+        row["image"].save(str(fname))
+
+    print(f"[prepare_dynamic_graph_qa] Exported {len(rows)} images to {images_dir.resolve()}")
 
 
 if __name__ == "__main__":
