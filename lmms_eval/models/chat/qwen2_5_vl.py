@@ -152,7 +152,7 @@ class Qwen2_5_VL(Qwen2_5_VLSimple):
             total_tokens += sum(len(ids) for ids in generated_ids_trimmed)
 
             for i, (ans, context) in enumerate(zip(answers, texts)):
-                res.append(GenerationResult(text=ans, token_counts=TokenCounts(output_tokens=len(generated_ids_trimmed[i]))))
+                res.append(GenerationResult(text=ans, token_counts=TokenCounts(input_tokens=len(inputs.input_ids[i]), output_tokens=len(generated_ids_trimmed[i]))))
                 self.cache_hook.add_partial("generate_until", (context, gen_kwargs), ans)
 
                 eval_logger.debug(f"Question: {context}")

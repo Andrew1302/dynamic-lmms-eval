@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 
 from lmms_eval import utils
-from lmms_eval.api.instance import Instance
+from lmms_eval.api.instance import GenerationResult, Instance
 
 T = TypeVar("T", bound="lmms")
 
@@ -81,7 +81,7 @@ class lmms(abc.ABC):
 
     # TODO: Add an optional max length
     @abc.abstractmethod
-    def generate_until(self, requests) -> List[str]:
+    def generate_until(self, requests) -> List[GenerationResult]:
         """Generate greedily until a stopping sequence
 
         :param requests: list[Instance]
@@ -100,7 +100,7 @@ class lmms(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def generate_until_multi_round(self, requests) -> List[str]:
+    def generate_until_multi_round(self, requests) -> List[GenerationResult]:
         """Generate greedily until a stopping sequence
 
         :param requests: list[Instance]

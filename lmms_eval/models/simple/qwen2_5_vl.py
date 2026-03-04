@@ -15,7 +15,7 @@ from transformers import (
 )
 
 from lmms_eval import utils
-from lmms_eval.api.instance import Instance
+from lmms_eval.api.instance import GenerationResult, Instance
 from lmms_eval.api.model import lmms
 from lmms_eval.api.registry import register_model
 from lmms_eval.imports import optional_import
@@ -176,7 +176,7 @@ class Qwen2_5_VL(lmms):
             quality=85,
         )
 
-    def generate_until(self, requests: List[Instance]) -> List[str]:
+    def generate_until(self, requests: List[Instance]) -> List[GenerationResult]:
         res = []
 
         def _collate(x):
@@ -356,7 +356,7 @@ class Qwen2_5_VL(lmms):
                 answers[i] = ans
 
             for ans, context in zip(answers, contexts):
-                res.append(ans)
+                res.append(GenerationResult(text=ans))
                 self.cache_hook.add_partial("generate_until", (context, gen_kwargs), ans)
                 pbar.update(1)
 
@@ -368,7 +368,7 @@ class Qwen2_5_VL(lmms):
         pbar.close()
         return res
 
-    def generate_until_multi_round(self, requests: List[Instance]) -> List[str]:
+    def generate_until_multi_round(self, requests: List[Instance]) -> List[GenerationResult]:
         res = []
 
         def _collate(x):
