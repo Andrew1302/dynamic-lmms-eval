@@ -13,7 +13,7 @@ export HF_HOME="~/.cache/huggingface"
 # Step 1: generate the dataset (140 samples = 10 per task, small graphs, fixed seed)
 python tools/prepare_dynamic_graph_qa.py \
     --num-samples 140 \
-    --size small \
+    --size all \
     --seed 42 \
     --output-dir ./dynamic_graph_qa_data
 
@@ -28,8 +28,8 @@ python tools/prepare_dynamic_graph_qa.py \
 # Step 3: full evaluation
 accelerate launch --num_processes=1 --main_process_port=12346 -m lmms_eval \
     --model qwen2_5_vl \
-    --model_args pretrained=Qwen/Qwen2.5-VL-7B-Instruct,max_pixels=12845056 \
+    --model_args pretrained=Qwen/Qwen2.5-VL-3B-Instruct \
     --tasks dynamic_graph_qa \
     --batch_size 1 \
     --log_samples \
-    --output_path ./logs/dynamic_graph_qa_qwen25vl
+    --output_path ./logs/dynamic_graph_qa_qwen25vl_3b

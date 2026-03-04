@@ -13,7 +13,7 @@ export HF_HOME="~/.cache/huggingface"
 # Step 1: generate the dataset (140 samples = 10 per task, small graphs, fixed seed)
 python tools/prepare_dynamic_graph_qa.py \
     --num-samples 140 \
-    --size small \
+    --size all \
     --seed 42 \
     --output-dir ./dynamic_graph_qa_data
 

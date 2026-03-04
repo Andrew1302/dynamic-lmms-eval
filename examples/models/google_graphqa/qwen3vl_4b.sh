@@ -15,7 +15,7 @@
 #   bash examples/models/google_graphqa_qwen25vl.sh             # full dataset
 
 # Set to e.g. 0.1 for 10%, or leave empty for all samples
-LIMIT="0.1"
+LIMIT="0.025"
 
 export HF_HOME="~/.cache/huggingface"
 
