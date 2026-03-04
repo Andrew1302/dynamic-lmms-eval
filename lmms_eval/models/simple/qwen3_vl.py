@@ -44,6 +44,7 @@ class Qwen3_VL(lmms):
         min_pixels: int = 256 * 28 * 28,
         max_pixels: int = 1605632,
         max_num_frames: int = 32,
+        fps: Optional[int] = None,
         system_prompt: Optional[str] = "You are a helpful assistant.",
         interleave_visuals: Optional[bool] = False,
         reasoning_prompt: Optional[str] = None,
@@ -52,6 +53,7 @@ class Qwen3_VL(lmms):
         super().__init__()
         # Do not use kwargs for now
         assert kwargs == {}, f"Unexpected kwargs: {kwargs}"
+        self.fps = fps
 
         # Validate attention implementation
         valid_attn_implementations = [None, "flash_attention_2", "sdpa", "eager"]
