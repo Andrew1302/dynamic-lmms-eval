@@ -8,14 +8,13 @@
 # To run a single config, replace --tasks google_graphqa with e.g.:
 #   --tasks google_graphqa_cycle_check
 #
-# Sampling: set LIMIT to a fraction (0.0-1.0) to evaluate that proportion of
-# each config, or leave empty for the full dataset.
-#   LIMIT=0.1 bash examples/models/google_graphqa_qwen25vl.sh   # 10% of each config
-#   LIMIT=0.5 bash examples/models/google_graphqa_qwen25vl.sh   # 50% of each config
-#   bash examples/models/google_graphqa_qwen25vl.sh             # full dataset
+# Sampling: pass a fraction (0.0-1.0) as the first argument to evaluate that
+# proportion of each config, or omit for the full dataset.
+#   bash examples/models/google_graphqa/qwen25vl_3b.sh 0.1   # 10% of each config
+#   bash examples/models/google_graphqa/qwen25vl_3b.sh 0.5   # 50% of each config
+#   bash examples/models/google_graphqa/qwen25vl_3b.sh       # full dataset
 
-# Set to e.g. 0.1 for 10%, or leave empty for all samples
-LIMIT="0.025"
+LIMIT=${0.1:-""}
 
 export HF_HOME="~/.cache/huggingface"
 
