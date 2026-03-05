@@ -4,7 +4,7 @@
 # Run from the dynamic-lmms-eval repo root:
 #   bash examples/models/google_graphqa_qwen25vl.sh
 #
-# Evaluates all 12 graph task configs (zero_shot_test split) as a group.
+# Evaluates 11 graph task configs (zero_shot_test split) as a group.
 # To run a single config, replace --tasks google_graphqa with e.g.:
 #   --tasks google_graphqa_cycle_check
 #

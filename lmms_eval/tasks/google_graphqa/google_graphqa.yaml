@@ -6,7 +6,6 @@ task:
   - google_graphqa_edge_count
   - google_graphqa_edge_existence
   - google_graphqa_maximum_flow
-  - google_graphqa_node_classification
   - google_graphqa_node_count
   - google_graphqa_node_degree
   - google_graphqa_reachability

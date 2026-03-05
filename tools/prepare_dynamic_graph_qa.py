@@ -36,15 +36,21 @@ if str(_DYNAMIC_DATASET_ROOT) not in sys.path:
 pkg = importlib.import_module("src.dataset-generator")
 
 # ---------------------------------------------------------------------------
+# Default task list (11 tasks — excludes connectivity_check, connected_components, mst)
+# ---------------------------------------------------------------------------
+_DEFAULT_TASKS = [
+    "node_count", "edge_count", "node_degree", "cycle_check",
+    "edge_existence", "connected_nodes", "disconnected_nodes",
+    "reachability", "shortest_path", "triangle_counting", "maximum_flow",
+]
+
+# ---------------------------------------------------------------------------
 # Graph generators per task family
 # ---------------------------------------------------------------------------
-_YESNO_TASKS = {"cycle_check", "edge_existence", "reachability", "connectivity_check"}
+_YESNO_TASKS = {"cycle_check", "edge_existence", "reachability"}
 _LIST_TASKS = {"connected_nodes", "disconnected_nodes"}
-_WEIGHTED_TASKS = {"mst", "shortest_path"}
+_WEIGHTED_TASKS = {"shortest_path"}
 _FLOW_TASKS = {"maximum_flow"}
-
-# Tasks that need possibly-disconnected graphs for interesting samples
-_POSSIBLY_DISCONNECTED_TASKS = {"reachability", "connectivity_check", "connected_components"}
 
 
 def _make_graph(task_name: str, size: str):
@@ -54,8 +60,6 @@ def _make_graph(task_name: str, size: str):
         return gg.random_directed_weighted_graph(n)
     if task_name in _WEIGHTED_TASKS:
         return gg.random_weighted_connected_graph(n)
-    if task_name in _POSSIBLY_DISCONNECTED_TASKS:
-        return gg.random_possibly_disconnected(n)
     return gg.random_graph(n)
 
 
@@ -79,7 +83,7 @@ def main() -> None:
     random.seed(args.seed)
 
     all_tasks = pkg.get_all_tasks()
-    task_names = args.tasks if args.tasks else list(all_tasks.keys())
+    task_names = args.tasks if args.tasks else list(_DEFAULT_TASKS)
 
     # Validate requested task names
     unknown = set(task_names) - set(all_tasks.keys())
