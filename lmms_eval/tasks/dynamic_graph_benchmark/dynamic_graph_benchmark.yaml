@@ -1,0 +1,6 @@
+group: dynamic_graph_benchmark
+task:
+  - dynamic_graph_benchmark_connectivity_direct
+  - dynamic_graph_benchmark_connectivity_disguise
+  - dynamic_graph_benchmark_coloring_direct
+  - dynamic_graph_benchmark_coloring_disguise

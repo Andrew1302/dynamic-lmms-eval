@@ -8,8 +8,6 @@
 #   - dynamic-dataset repo at ../dynamic-dataset (sibling of dynamic-lmms-eval)
 #   - uv environment with lmms-eval, datasets, networkx, matplotlib, Pillow installed
 
-export HF_HOME="~/.cache/huggingface"
-
 NUM_SAMPLES=${1:-140}
 
 # Step 1: generate the dataset (140 samples = 10 per task, small graphs, fixed seed)

@@ -1,0 +1,24 @@
+"results_google_graphqa": {
+    "docs": 5500.0,
+    "docs_with_token_counts": 5500.0,
+    "total_input_tokens": 2164344.0,
+    "total_output_tokens": 35851.0,
+    "total_tokens": 2200195.0,
+    "total_correct_score": 1743.0,
+    "avg_output_tokens_per_sample": 6.518363636363636,
+    "tokens_per_correct_answer": 20.568559954102124,
+    "accuracy": 0.3169
+  }
+
+  "results_dynamic_graphqa": {
+    "docs": 5500.0,
+    "docs_with_token_counts": 5500.0,
+    "total_input_tokens": 4006990.0,
+    "total_output_tokens": 26169.0,
+    "total_tokens": 4033159.0,
+    "total_correct_score": 2009.0,
+    "avg_output_tokens_per_sample": 4.758,
+    "tokens_per_correct_answer": 13.025883524141364,
+    "accuracy": 0.3653
+  }
+

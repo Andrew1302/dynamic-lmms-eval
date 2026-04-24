@@ -1,0 +1,7 @@
+task: "dynamic_graph_benchmark_connectivity_disguise"
+include: _default_template_yaml
+process_docs: !function utils.filter_connectivity_disguise
+lmms_eval_specific_kwargs:
+  default:
+    pre_prompt: "Answer with only 'Yes' or 'No'.\n"
+    post_prompt: ""

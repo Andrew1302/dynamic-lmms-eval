@@ -16,8 +16,6 @@
 
 LIMIT=${0.1:-""}
 
-export HF_HOME="~/.cache/huggingface"
-
 # Smoke test (optional): first 8 samples of cycle_check only
 # python -m lmms_eval \
 #     --model qwen2_5_vl \

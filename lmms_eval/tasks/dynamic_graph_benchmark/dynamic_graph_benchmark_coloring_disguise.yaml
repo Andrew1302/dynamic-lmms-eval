@@ -1,0 +1,7 @@
+task: "dynamic_graph_benchmark_coloring_disguise"
+include: _default_template_yaml
+process_docs: !function utils.filter_coloring_disguise
+lmms_eval_specific_kwargs:
+  default:
+    pre_prompt: "Answer with a single integer and nothing else.\n"
+    post_prompt: ""
