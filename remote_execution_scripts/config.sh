@@ -33,5 +33,6 @@ LOCAL_DATASET_ROOT="${LOCAL_DATASET_ROOT:-${LOCAL_REPO_ROOT}/../dynamic-dataset}
 # Local directory where fetched results land (one subdir per job).
 LOCAL_RESULTS_DIR="${LOCAL_RESULTS_DIR:-${LOCAL_REPO_ROOT}/remote_results}"
 
-# SSH_KEY is required — export it before running any script:
-#   export SSH_KEY="$HOME/.ssh/vm_key"
+# SSH_KEY is required. Preferred: copy .env.example to .env and set it there
+# (loaded automatically by lib/common.sh). One-off override still works:
+#   SSH_KEY="$HOME/.ssh/vm_key" ./02_run.sh <job>

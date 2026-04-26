@@ -28,7 +28,7 @@ fail() { echo "${C_R}[remote] ERROR:${C_RESET} $*" >&2; exit 1; }
 # --- env validation ----------------------------------------------------------
 require_env() {
     if [ -z "${SSH_KEY:-}" ]; then
-        fail "SSH_KEY is not set. Export it first: export SSH_KEY=\"\$HOME/.ssh/your_key\""
+        fail "SSH_KEY is not set. Put it in remote_execution_scripts/.env (see .env.example) or export SSH_KEY=\"\$HOME/.ssh/your_key\"."
     fi
     if [ ! -f "$SSH_KEY" ]; then
         fail "SSH_KEY points to a file that does not exist: $SSH_KEY"
@@ -106,6 +106,30 @@ local_results_dir() { echo "${LOCAL_RESULTS_DIR}/${1}"; }
 # $REPO_ROOT is set before sourcing so load_job can find jobs/.
 bootstrap() {
     REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[1]}")/.." && pwd)"
+    # Load remote_execution_scripts/.env if present. Anything already in the
+    # shell environment wins (so a one-off `SSH_KEY=... ./02_run.sh ...` still
+    # overrides). .env is gitignored — see .env.example for the template.
+    local env_file="$REPO_ROOT/remote_execution_scripts/.env"
+    if [ -f "$env_file" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            # skip blanks and comments
+            [[ -z "${line// }" || "$line" =~ ^[[:space:]]*# ]] && continue
+            # split KEY=VALUE on the first =
+            local key="${line%%=*}"
+            local val="${line#*=}"
+            key="${key#"${key%%[![:space:]]*}"}"; key="${key%"${key##*[![:space:]]}"}"
+            # strip a single layer of surrounding single or double quotes
+            if [[ "$val" =~ ^\".*\"$ ]] || [[ "$val" =~ ^\'.*\'$ ]]; then
+                val="${val:1:${#val}-2}"
+            fi
+            # only set if not already in the shell env
+            if [ -z "${!key:-}" ]; then
+                # eval so values like $HOME or ~ expand the same way they
+                # would on a normal `export` line
+                eval "export $key=\"$val\""
+            fi
+        done < "$env_file"
+    fi
     # shellcheck disable=SC1091
     source "$REPO_ROOT/remote_execution_scripts/config.sh"
     require_env

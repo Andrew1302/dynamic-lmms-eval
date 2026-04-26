@@ -9,6 +9,7 @@ session so you can disconnect, reconnect, and tail logs at will.
 
 ```
 remote_execution_scripts/
+├── .env.example              # template — copy to .env and set SSH_KEY
 ├── config.sh                 # VM identity (user, host, port, workdir)
 ├── jobs/
 │   ├── example.conf                                 # boilerplate template
@@ -50,24 +51,33 @@ All four are created on first deploy; override via env vars (`REMOTE_WORKDIR`, `
 
 ### SSH key
 
-Export your key before running anything:
+Copy `.env.example` to `.env` and point `SSH_KEY` at your private key:
 
 ```bash
-export SSH_KEY="$HOME/.ssh/vm_key"
+cp remote_execution_scripts/.env.example remote_execution_scripts/.env
+# then edit .env so SSH_KEY=... matches your key path
 ```
 
-On WSL with a Windows-side key (`/mnt/c/Users/…`), use the helper:
+`.env` is gitignored and loaded automatically by every script. You can also
+override per-invocation (`SSH_KEY=... ./02_run.sh <job>`) — shell env wins
+over `.env`.
+
+On WSL with a Windows-side key (`/mnt/c/Users/…`), use the helper to copy
+it into `~/.ssh` with `chmod 600`:
 
 ```bash
 source ./00_wsl_fix_key.sh /mnt/c/Users/Andrew/.ssh/vm_key
 ```
 
+It exports `SSH_KEY` for the current shell; for persistence put the resulting
+path in `.env` instead.
+
 ## Typical flow
 
 ```bash
 # one-time: point config.sh at your VM if needed (VM_USER, VM_HOST, VM_PORT,
-# REMOTE_WORKDIR) — or override inline via env vars.
-export SSH_KEY="$HOME/.ssh/vm03_pk"
+# REMOTE_WORKDIR) — or override inline via env vars / .env.
+# SSH_KEY is read from remote_execution_scripts/.env (see "SSH key" above).
 
 JOB=dynamic_graph_benchmark_qwen25vl_3b
 
