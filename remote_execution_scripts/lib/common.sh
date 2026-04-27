@@ -86,6 +86,12 @@ rsync_up() {
         "$src" "${VM_USER}@${VM_HOST}:${base}/${dst}"
 }
 
+scp_up() {
+    # scp a single local file to an absolute remote path. Args: <local_file> <remote_abs_path>
+    # scp uses -P for port (ssh uses -p), so we can't pass _ssh_opts verbatim.
+    scp -i "$SSH_KEY" -P "$VM_PORT" -o StrictHostKeyChecking=no -q "$1" "${VM_USER}@${VM_HOST}:$2"
+}
+
 rsync_down() {
     # rsync remote -> local. Args: <remote_relative_path> <local_path>
     local src="$1" dst="$2"
