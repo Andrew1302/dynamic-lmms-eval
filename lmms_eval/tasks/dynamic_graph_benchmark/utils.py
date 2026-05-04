@@ -21,7 +21,7 @@ from collections import defaultdict
 
 from loguru import logger as eval_logger
 
-_YESNO_TASKS = {"connectivity"}
+_YESNO_TASKS = {"connectivity", "directed_connectivity"}
 _INTEGER_TASKS = {"coloring"}
 
 _YES_PATTERNS = {"yes", "y", "true", "t"}
@@ -133,3 +133,11 @@ def filter_coloring_direct(dataset):
 
 def filter_coloring_disguise(dataset):
     return _filter(dataset, "coloring", "disguise")
+
+
+def filter_directed_connectivity_direct(dataset):
+    return _filter(dataset, "directed_connectivity", "direct")
+
+
+def filter_directed_connectivity_disguise(dataset):
+    return _filter(dataset, "directed_connectivity", "disguise")
