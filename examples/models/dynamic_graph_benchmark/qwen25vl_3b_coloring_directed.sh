@@ -9,7 +9,7 @@
 #   - dynamic-dataset repo at ../dynamic-dataset (sibling of dynamic-lmms-eval)
 #   - uv environment with lmms-eval, datasets, networkx, matplotlib, Pillow installed
 
-NUM_SAMPLES=${1:-10000}
+NUM_SAMPLES=${1:-5000}
 DIFFICULTY=${2:-medium}
 
 # Step 1: generate the dataset (direct + disguise rows per task), restricted

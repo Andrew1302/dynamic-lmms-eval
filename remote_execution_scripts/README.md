@@ -21,7 +21,9 @@ remote_execution_scripts/
 ├── 02_run.sh    <job>        # start the job in tmux, tee to run.log
 ├── 03_logs.sh   <job> [...]  # tail -F run.log (or --attach, --status, --tail N)
 ├── 04_fetch.sh  <job>        # rsync RESULT_PATHS back into ./remote_results/<job>/
-└── 05_stop.sh   <job>        # kill the tmux session
+├── 05_stop.sh   <job>        # kill the tmux session
+└── 06_compare_direct_disguise.sh <job> [--timestamp TS]
+                              # (postprocess) write an Excel comparing direct vs disguise per pair
 ```
 
 ## Prerequisites
@@ -88,6 +90,45 @@ JOB=dynamic_graph_benchmark_qwen25vl_3b
 ./03_logs.sh  $JOB --status   # quick non-interactive check
 ./04_fetch.sh $JOB        # once it's done, rsync logs/ and data back
 ```
+
+## Postprocessing
+
+Result-processing scripts are numbered `06+` and run **locally** against
+`./remote_results/<job>/`. Each one is a thin bash dispatcher that reads
+processor-specific keys from the job `.conf` and invokes a Python script
+under `tools/postprocess/`.
+
+### `06_compare_direct_disguise.sh` — direct vs disguise Excel
+
+For benchmarks with paired `_direct` / `_disguise` task variants (e.g.
+Dynamic Graph Benchmark), this writes one workbook to
+`./remote_results/<job>/processed/compare_direct_disguise.xlsx`:
+
+- a `main` sheet with one row per pair (sample count, direct accuracy,
+  disguise accuracy, paired accuracy = both correct on the same `doc_id`);
+- one sheet per pair with one row per `doc_id` (target, both responses,
+  both correctness flags, `both_correct`) plus a final TOTAL row.
+
+The job `.conf` declares the mapping:
+
+```bash
+COMPARE_PAIRS=(
+    "coloring:dynamic_graph_benchmark_coloring_direct:dynamic_graph_benchmark_coloring_disguise"
+    "directed_connectivity:dynamic_graph_benchmark_directed_connectivity_direct:dynamic_graph_benchmark_directed_connectivity_disguise"
+)
+```
+
+Run after `04_fetch.sh`:
+
+```bash
+./remote_execution_scripts/06_compare_direct_disguise.sh \
+    dynamic_graph_benchmark_coloring_directed_qwen25vl_3b
+# pin a specific run if multiple timestamps exist:
+./remote_execution_scripts/06_compare_direct_disguise.sh \
+    dynamic_graph_benchmark_coloring_directed_qwen25vl_3b --timestamp 20260505_055447
+```
+
+By default the latest timestamp covering every referenced task is used.
 
 ## How it works
 

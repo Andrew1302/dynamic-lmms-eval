@@ -110,6 +110,7 @@ local_results_dir() { echo "${LOCAL_RESULTS_DIR}/${1}"; }
 # --- bootstrapping -----------------------------------------------------------
 # Every top-level script sources this, then sources config.sh.
 # $REPO_ROOT is set before sourcing so load_job can find jobs/.
+# Set BOOTSTRAP_LOCAL=1 before calling for local-only scripts (no SSH).
 bootstrap() {
     REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[1]}")/.." && pwd)"
     # Load remote_execution_scripts/.env if present. Anything already in the
@@ -138,7 +139,9 @@ bootstrap() {
     fi
     # shellcheck disable=SC1091
     source "$REPO_ROOT/remote_execution_scripts/config.sh"
-    require_env
-    # re-populate ssh opts now that VM_PORT / SSH_KEY are known
-    _ssh_opts=(-i "$SSH_KEY" -p "$VM_PORT" -o StrictHostKeyChecking=no -o ServerAliveInterval=30)
+    if [ "${BOOTSTRAP_LOCAL:-0}" != "1" ]; then
+        require_env
+        # re-populate ssh opts now that VM_PORT / SSH_KEY are known
+        _ssh_opts=(-i "$SSH_KEY" -p "$VM_PORT" -o StrictHostKeyChecking=no -o ServerAliveInterval=30)
+    fi
 }
