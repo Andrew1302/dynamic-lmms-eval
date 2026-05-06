@@ -25,8 +25,22 @@ from collections import defaultdict
 from pathlib import Path
 
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+
+# Excel-style "Good"/"Bad" semantics for at-a-glance pass/fail readability.
+GREEN_FILL = PatternFill(fill_type="solid", fgColor="C6EFCE")
+GREEN_FONT = Font(color="006100")
+RED_FILL = PatternFill(fill_type="solid", fgColor="FFC7CE")
+RED_FONT = Font(color="9C0006")
+HEADER_FILL = PatternFill(fill_type="solid", fgColor="305496")
+HEADER_FONT = Font(bold=True, color="FFFFFF")
+TOTAL_FILL = PatternFill(fill_type="solid", fgColor="D9E1F2")
+TOTAL_FONT = Font(bold=True, color="1F2A4A")
+THIN_SIDE = Side(border_style="thin", color="BFBFBF")
+CELL_BORDER = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
+CENTER = Alignment(horizontal="center", vertical="center")
+LEFT = Alignment(horizontal="left", vertical="center")
 
 SAMPLES_RE = re.compile(r"^(?P<ts>\d{8}_\d{6})_samples_(?P<task>.+)\.jsonl$")
 
@@ -171,26 +185,115 @@ def _autosize(ws):
     for col in ws.columns:
         letter = get_column_letter(col[0].column)
         width = max((len(str(c.value)) for c in col if c.value is not None), default=8)
-        ws.column_dimensions[letter].width = min(max(width + 2, 10), 60)
+        ws.column_dimensions[letter].width = min(max(width + 2, 12), 60)
+
+
+def _style_header_row(sheet) -> None:
+    for cell in sheet[1]:
+        cell.font = HEADER_FONT
+        cell.fill = HEADER_FILL
+        cell.alignment = CENTER
+        cell.border = CELL_BORDER
+    sheet.row_dimensions[1].height = 22
+
+
+def _write_consolidated(sheet, main_rows: list[dict]) -> None:
+    headers = ["pair", "n_samples",
+               "direct_accuracy", "disguise_accuracy", "paired_accuracy"]
+    sheet.append(headers)
+    _style_header_row(sheet)
+
+    accuracy_cols = {"direct_accuracy", "disguise_accuracy", "paired_accuracy"}
+    for row in main_rows:
+        sheet.append([row[h] for h in headers])
+        excel_row = sheet.max_row
+        for idx, header in enumerate(headers, start=1):
+            cell = sheet.cell(row=excel_row, column=idx)
+            cell.border = CELL_BORDER
+            if header in accuracy_cols:
+                cell.number_format = "0.00%"
+                cell.alignment = CENTER
+            elif header == "n_samples":
+                cell.number_format = "#,##0"
+                cell.alignment = CENTER
+            elif header == "pair":
+                cell.font = Font(bold=True)
+                cell.alignment = LEFT
+            else:
+                cell.alignment = LEFT
+
+    sheet.freeze_panes = "A2"
+    _autosize(sheet)
+
+
+def _write_pair_sheet(sheet, rows: list[dict]) -> None:
+    if not rows:
+        return
+    headers = list(rows[0].keys())
+    sheet.append(headers)
+    _style_header_row(sheet)
+
+    correct_cols = {"direct_correct", "disguise_correct", "both_correct"}
+    response_cols = {"direct_response": "direct_correct",
+                     "disguise_response": "disguise_correct"}
+    last_idx = len(rows) - 1
+
+    for r_idx, row in enumerate(rows):
+        is_total = (r_idx == last_idx)
+        sheet.append([row[h] for h in headers])
+        excel_row = sheet.max_row
+        for c_idx, header in enumerate(headers, start=1):
+            cell = sheet.cell(row=excel_row, column=c_idx)
+            cell.border = CELL_BORDER
+            if is_total:
+                cell.font = TOTAL_FONT
+                cell.fill = TOTAL_FILL
+                if header in correct_cols:
+                    cell.number_format = "#,##0"
+                    cell.alignment = CENTER
+                elif header == "doc_id":
+                    cell.alignment = LEFT
+                else:
+                    cell.alignment = LEFT
+                continue
+            if header == "doc_id":
+                cell.alignment = CENTER
+                cell.number_format = "#,##0"
+            elif header in correct_cols:
+                cell.alignment = CENTER
+                value = row.get(header)
+                if value == 1:
+                    cell.fill = GREEN_FILL
+                    cell.font = GREEN_FONT
+                elif value == 0:
+                    cell.fill = RED_FILL
+                    cell.font = RED_FONT
+            elif header in response_cols:
+                cell.alignment = LEFT
+                paired_correct = row.get(response_cols[header])
+                if paired_correct == 1:
+                    cell.font = GREEN_FONT
+                elif paired_correct == 0:
+                    cell.font = RED_FONT
+            elif header == "target":
+                cell.alignment = CENTER
+                cell.font = Font(bold=True)
+            else:
+                cell.alignment = LEFT
+
+    sheet.freeze_panes = "B2"
+    _autosize(sheet)
 
 
 def write_workbook(out_path: Path, main_rows: list[dict], pair_sheets: list[tuple[str, list[dict]]]) -> None:
     wb = Workbook()
-    bold = Font(bold=True)
 
     ws = wb.active
-    ws.title = "main"
+    ws.title = "consolidated"
     if main_rows:
-        headers = list(main_rows[0].keys())
-        ws.append(headers)
-        for cell in ws[1]:
-            cell.font = bold
-        for row in main_rows:
-            ws.append([row[h] for h in headers])
-        ws.freeze_panes = "A2"
-        _autosize(ws)
+        _write_consolidated(ws, main_rows)
 
-    used_titles: set[str] = {"main"}
+    used_titles: set[str] = {"consolidated"}
     for label, rows in pair_sheets:
         title = label[:31] or "pair"
         suffix = 1
@@ -202,17 +305,7 @@ def write_workbook(out_path: Path, main_rows: list[dict], pair_sheets: list[tupl
         used_titles.add(title)
 
         sheet = wb.create_sheet(title=title)
-        if rows:
-            headers = list(rows[0].keys())
-            sheet.append(headers)
-            for cell in sheet[1]:
-                cell.font = bold
-            for row in rows:
-                sheet.append([row[h] for h in headers])
-            for cell in sheet[sheet.max_row]:
-                cell.font = bold
-            sheet.freeze_panes = "A2"
-            _autosize(sheet)
+        _write_pair_sheet(sheet, rows)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out_path)
