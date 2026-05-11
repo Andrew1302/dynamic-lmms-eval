@@ -4,3 +4,5 @@ task:
   - dynamic_graph_benchmark_coloring_disguise
   - dynamic_graph_benchmark_directed_connectivity_direct
   - dynamic_graph_benchmark_directed_connectivity_disguise
+  - dynamic_graph_benchmark_shortest_path_direct
+  - dynamic_graph_benchmark_shortest_path_disguise

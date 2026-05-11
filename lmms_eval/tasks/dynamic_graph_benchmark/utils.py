@@ -22,7 +22,12 @@ from collections import defaultdict
 from loguru import logger as eval_logger
 
 _YESNO_TASKS = {"connectivity", "directed_connectivity"}
-_INTEGER_TASKS = {"coloring"}
+_INTEGER_TASKS = {"coloring", "shortest_path"}
+# Tasks whose prompt forces the model to echo vertex indices ("from vertex X
+# to vertex Y") — picking the FIRST integer would lock onto a vertex id when
+# the model violates "answer with a single integer". The last integer is far
+# more often the actual answer (path total / chromatic number / etc.).
+_LAST_INT_TASKS = {"shortest_path"}
 
 _YES_PATTERNS = {"yes", "y", "true", "t"}
 _NO_PATTERNS = {"no", "n", "false", "f"}
@@ -43,8 +48,10 @@ def _normalize(prediction: str, task: str) -> str:
         return token
 
     if task in _INTEGER_TASKS:
-        match = re.search(r"-?\d+", pred)
-        return match.group(0) if match else pred.lower()
+        ints = re.findall(r"-?\d+", pred)
+        if not ints:
+            return pred.lower()
+        return ints[-1] if task in _LAST_INT_TASKS else ints[0]
 
     return pred.lower()
 
@@ -141,3 +148,11 @@ def filter_directed_connectivity_direct(dataset):
 
 def filter_directed_connectivity_disguise(dataset):
     return _filter(dataset, "directed_connectivity", "disguise")
+
+
+def filter_shortest_path_direct(dataset):
+    return _filter(dataset, "shortest_path", "direct")
+
+
+def filter_shortest_path_disguise(dataset):
+    return _filter(dataset, "shortest_path", "disguise")

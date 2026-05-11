@@ -64,6 +64,11 @@ exec > >(tee -a "\$LOG_PATH") 2>&1
 export HF_HOME='${REMOTE_HF_HOME}'
 export UV_CACHE_DIR='${REMOTE_UV_CACHE_DIR}'
 
+# Expose the job name to user launchers so they can derive job-keyed paths
+# (e.g. --output_path ./logs/\$JOB_NAME) instead of hard-coding a name that
+# drifts from the .conf and produces orphaned result trees.
+export JOB_NAME='${JOB_NAME}'
+
 cd '${REMOTE_WORKDIR}'
 
 # Activate the venv built by \`uv sync\` during deploy.
