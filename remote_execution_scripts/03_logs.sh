@@ -1,13 +1,16 @@
 #!/bin/bash
 # =============================================================================
-# 03_logs.sh <job> [--attach|--tail N|--status]
+# 03_logs.sh <job> [--attach|--tail N|--status|--until-done [N]]
 # -----------------------------------------------------------------------------
 # Default: stream run.log live (like `tail -f`). Ctrl-C detaches; the remote
 # process keeps running inside tmux.
 #
-# --attach   : attach to the tmux session itself (interactive, Ctrl-b d detaches).
-# --tail N   : print the last N lines and exit (N defaults to 100).
-# --status   : print session state + last 20 lines + exit-code sentinel. Non-interactive.
+# --attach     : attach to the tmux session itself (Ctrl-b d to detach).
+# --tail N     : print the last N lines and exit (N defaults to 100).
+# --status     : print session state + last 20 lines + exit-code sentinel.
+# --until-done [N]: poll every N seconds (default 30) until the tmux session
+#                   ends; then dump the final tail (last 80 lines) and the
+#                   exit sentinel. Used by run_batch.sh to chain jobs.
 # =============================================================================
 
 set -euo pipefail
@@ -21,11 +24,19 @@ shift || true
 
 MODE="follow"
 TAIL_N=100
+POLL_S=30
 while [ $# -gt 0 ]; do
     case "$1" in
-        --attach)  MODE="attach"; shift ;;
-        --tail)    MODE="tail"; TAIL_N="${2:-100}"; shift 2 ;;
-        --status)  MODE="status"; shift ;;
+        --attach)     MODE="attach"; shift ;;
+        --tail)       MODE="tail"; TAIL_N="${2:-100}"; shift 2 ;;
+        --status)     MODE="status"; shift ;;
+        --until-done) MODE="until-done"
+                      if [ "${2:-}" ] && [ "${2#-}" = "$2" ]; then
+                          POLL_S="$2"; shift 2
+                      else
+                          shift
+                      fi
+                      ;;
         *) fail "Unknown flag: $1" ;;
     esac
 done
@@ -72,5 +83,27 @@ REMOTE
         log "tailing $LOG_PATH (Ctrl-C stops tail; remote job keeps running)"
         # -F retries if the file doesn't exist yet; --pid exits when tmux dies.
         ssh_tty "tail -F '$LOG_PATH'"
+        ;;
+    until-done)
+        log "polling tmux session '$SESSION' every ${POLL_S}s until it ends"
+        while ssh_cmd "tmux has-session -t '$SESSION' 2>/dev/null"; do
+            sleep "$POLL_S"
+        done
+        log "session ended; dumping final tail + exit sentinel"
+        ssh_cmd "bash -s" <<REMOTE
+set -u
+echo '=== final tail (80 lines) ==='
+tail -n 80 '$LOG_PATH' 2>/dev/null || echo '(no log at $LOG_PATH)'
+echo
+echo '=== exit sentinel ==='
+if [ -f '$RUN_DIR/exit_code' ]; then
+    ec=\$(cat '$RUN_DIR/exit_code')
+    echo "exit_code: \$ec"
+    exit "\$ec"
+else
+    echo 'exit_code: <missing>'
+    exit 0
+fi
+REMOTE
         ;;
 esac

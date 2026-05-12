@@ -1,0 +1,4 @@
+graph_benchmark/graph_bench_standard_qwen3vl_4b
+graph_benchmark/graph_bench_standard_internvl35_4b
+graph_benchmark/graph_bench_standard_qwen35_4b
+graph_benchmark/graph_bench_standard_gemma4_e4b
