@@ -49,6 +49,13 @@ load_job() {
         fail "Job config not found: $conf"
     fi
 
+    # Snapshot of currently-exported variable names so we can compute which
+    # vars the .conf adds. 02_run.sh forwards those (and only those) into the
+    # remote launcher — local `export` in the .conf does not reach SSH, so
+    # without this run_eval.sh sees an empty $MODEL_PRETRAINED on the VM.
+    local _before_exports
+    _before_exports="$(compgen -e | sort)"
+
     # shellcheck disable=SC1090
     source "$conf"
 
@@ -63,6 +70,15 @@ load_job() {
     if ! declare -p DATASET_UPLOAD_PATHS >/dev/null 2>&1; then
         DATASET_UPLOAD_PATHS=()
     fi
+
+    # Compute the set of newly-exported variable names (job env vars).
+    local _after_exports
+    _after_exports="$(compgen -e | sort)"
+    JOB_EXPORTS=()
+    local _var
+    while IFS= read -r _var; do
+        [ -n "$_var" ] && JOB_EXPORTS+=("$_var")
+    done < <(comm -13 <(printf '%s\n' "$_before_exports") <(printf '%s\n' "$_after_exports"))
 }
 
 # --- ssh helpers -------------------------------------------------------------

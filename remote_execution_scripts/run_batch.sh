@@ -12,10 +12,14 @@
 # Options:
 #   --keep-going  Continue to the next job after a failure (default: stop).
 #   --poll N      03_logs.sh --until-done poll interval, seconds (default 30).
+#   --no-report   Skip the trailing 07_batch_report.sh invocation.
 #
 # A short pass/fail summary is printed at the end. Per-job logs land in the
 # usual remote_results/<job> path via 04_fetch.sh; this script does not parse
-# accuracy numbers — see tools/postprocess/ for that.
+# accuracy numbers — see tools/postprocess/ for that. Once the queue is done
+# (whether every job succeeded or some failed), this script also calls
+# 07_batch_report.sh to write one aggregated xlsx covering the batch
+# (missing/failed jobs surface as NO_DATA rows). Pass --no-report to skip.
 # =============================================================================
 
 set -euo pipefail
@@ -24,11 +28,16 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 KEEP_GOING=0
 POLL_S=30
 JOBS=()
+MANIFEST=""
+RUN_REPORT=1
 
 while [ $# -gt 0 ]; do
     case "$1" in
         -f|--file)
             [ -f "$2" ] || { echo "manifest not found: $2" >&2; exit 2; }
+            # Remember the manifest path so 07 can use it for batch-name +
+            # job list rather than re-parsing what we read here.
+            if [ -z "$MANIFEST" ]; then MANIFEST="$2"; fi
             while IFS= read -r line; do
                 line="${line%%#*}"
                 line="${line//[$'\t\r\n ']/}"
@@ -38,8 +47,9 @@ while [ $# -gt 0 ]; do
             ;;
         --keep-going) KEEP_GOING=1; shift ;;
         --poll) POLL_S="$2"; shift 2 ;;
+        --no-report)  RUN_REPORT=0; shift ;;
         -h|--help)
-            sed -n '2,/^# ====/p' "$0" | head -n 24 | sed 's/^# \{0,1\}//'
+            sed -n '2,/^# ====/p' "$0" | head -n 28 | sed 's/^# \{0,1\}//'
             exit 0 ;;
         *) JOBS+=("$1"); shift ;;
     esac
@@ -90,4 +100,30 @@ for j in "${JOBS[@]}"; do
         *)       overall=1 ;;
     esac
 done
+
+# Aggregate every job (including failures, which become NO_DATA rows) into
+# one xlsx so the operator can read the whole batch in one place. Skip on
+# --no-report or if 07 itself isn't present.
+if [ "$RUN_REPORT" -eq 1 ] && [ -x "$HERE/07_batch_report.sh" ]; then
+    echo
+    echo "============================================================"
+    echo "[run_batch] batch report"
+    echo "============================================================"
+    REPORT_ARGS=()
+    if [ -n "$MANIFEST" ]; then
+        REPORT_ARGS+=(-f "$MANIFEST")
+    else
+        # Direct-id form: pass every job through individually. The batch
+        # name defaults to "batch" inside 07.
+        REPORT_ARGS+=("${JOBS[@]}")
+    fi
+    report_rc=0
+    "$HERE/07_batch_report.sh" "${REPORT_ARGS[@]}" || report_rc=$?
+    if [ "$report_rc" -ne 0 ]; then
+        # Don't let a postprocess failure mask the run's own pass/fail status —
+        # the per-job results are still on disk and 07 can be re-run later.
+        echo "[run_batch] WARNING: 07_batch_report.sh failed (exit $report_rc) — batch results are still on disk; re-run 07 manually" >&2
+    fi
+fi
+
 exit "$overall"

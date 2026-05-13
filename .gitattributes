@@ -1,0 +1,7 @@
+# Force LF for files that are sourced or executed by bash. With
+# core.autocrlf=true on Windows clones, git would otherwise convert these
+# to CRLF in the working tree and `source <conf>` / `bash <script>` fails
+# with "not a valid identifier: `…\r`" or "command not found: cmd\r".
+*.sh                    text eol=lf
+*.conf                  text eol=lf
+remote_execution_scripts/batches/*.txt   text eol=lf

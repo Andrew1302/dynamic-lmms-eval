@@ -22,8 +22,14 @@ remote_execution_scripts/
 ├── 03_logs.sh   <job> [...]  # tail -F run.log (or --attach, --status, --tail N)
 ├── 04_fetch.sh  <job>        # rsync RESULT_PATHS back into ./remote_results/<job>/
 ├── 05_stop.sh   <job>        # kill the tmux session
-└── 06_compare_direct_disguise.sh <job> [--timestamp TS]
-                              # (postprocess) write an Excel comparing direct vs disguise per pair
+├── 06_compare_direct_disguise.sh <job> [--timestamp TS]
+│                             # (postprocess) write an Excel comparing direct vs disguise per pair
+├── 07_batch_report.sh   -f <manifest.txt> [...]
+│                             # (postprocess) one xlsx aggregating every job in a batch
+├── run_batch.sh         -f <manifest.txt> [...]
+│                             # chain 01→04 across many jobs
+├── batches/<group>.txt       # per-axis manifests (run with -f, see "Batches" below)
+└── jobs/generate_graph_benchmark_jobs.py   # regenerates jobs/graph_benchmark/* + batches/*
 ```
 
 ## Prerequisites
@@ -129,6 +135,81 @@ Run after `04_fetch.sh`:
 ```
 
 By default the latest timestamp covering every referenced task is used.
+
+### `07_batch_report.sh` — one xlsx per batch
+
+After `run_batch.sh` (or any sequence of `04_fetch.sh` calls) has populated
+`remote_results/<job>/` for every job in a batch, generate one cross-job
+workbook:
+
+```bash
+./remote_execution_scripts/07_batch_report.sh -f remote_execution_scripts/batches/ablation_labels.txt
+# pin a sample timestamp for every job in the batch:
+./remote_execution_scripts/07_batch_report.sh \
+    -f remote_execution_scripts/batches/standard_4b.txt --timestamp 20260505_055447
+# abort instead of marking missing jobs NO_DATA:
+./remote_execution_scripts/07_batch_report.sh -f remote_execution_scripts/batches/sweep_nodes.txt --strict
+```
+
+Output lands in `remote_results/_batch_reports/<batch>_<gen_ts>.xlsx`. The
+`<gen_ts>` filename suffix is the **report generation time**, so re-running
+07 after a partial re-fetch never overwrites a prior report. A
+`<batch>_latest.xlsx` copy next to it is refreshed to point at the most
+recent run.
+
+Workbook layout:
+
+- **`summary`** — one row per job: `job`, `axis`, `axis_value`, `model`,
+  `model_pretrained`, `samples_ts`, `n_samples`, then per base-task accuracy
+  columns (`<task>_direct_acc` / `<task>_disguise_acc` / `<task>_paired_acc`),
+  ending with overall accuracy across all pairs. Jobs without fetched data
+  show up as `samples_ts=NO_DATA` rows so a partial report is still useful.
+- **One tab per job** — paired jobs (every standard / ablation_* batch) get
+  the same `consolidated` table that `06_compare_direct_disguise.sh` writes
+  (one row per task pair). Sweep jobs (`sweep_nodes` / `sweep_edges`) get
+  long-form `(base_task, variant, x, n, accuracy)` rows so the curve
+  information is preserved.
+
+## Batches
+
+Run a whole group of jobs end-to-end with `run_batch.sh -f`. Each manifest
+under `batches/` lists the jobs in one ablation axis:
+
+```bash
+cd remote_execution_scripts
+
+# regenerate confs + manifests after editing the generator
+python jobs/generate_graph_benchmark_jobs.py
+
+# run a batch (default: stop on first failure)
+./run_batch.sh -f batches/standard_4b.txt
+
+# typical overnight form: tolerate per-job failures, poll less often
+./run_batch.sh -f batches/ablation_labels.txt --keep-going --poll 60
+
+# skip the trailing aggregated xlsx (07_batch_report.sh) — useful if you'll
+# re-fetch later and only want one final report
+./run_batch.sh -f batches/sweep_nodes.txt --no-report
+```
+
+`run_batch.sh` calls `07_batch_report.sh` once the queue is done (whether
+every job succeeded or some failed — missing/failed jobs show up as
+`NO_DATA` rows in the report).
+
+| Manifest | Jobs | Axis | n / job |
+|---|---|---|---|
+| `standard_4b.txt` | 4 | baseline (numeric labels, default color, no adj matrix) | 5000 |
+| `ablation_labels.txt` | 8 | label_style ∈ {letters, none} × 4 models | 500 |
+| `ablation_color.txt` | 4 | node_color = `#F1948A` | 500 |
+| `ablation_adjmatrix.txt` | 4 | INCLUDE_ADJ_MATRIX=1 | 500 |
+| `ablation_thinking.txt` | 2 | Qwen3-VL-{4B,8B}-Thinking SKUs | 500 |
+| `ablation_model_size.txt` | 6 | larger panel: 8B–11B mixed family | 500 |
+| `sweep_nodes.txt` | 4 | vertex sweep (3..14, 250/value) | n/a |
+| `sweep_edges.txt` | 4 | edge sweep (3,5,8,12,18,25,35, 100/value) | n/a |
+
+After every job in a batch has been fetched, run
+`./07_batch_report.sh -f batches/<name>.txt` to consolidate the run into one
+xlsx (see above).
 
 ## How it works
 

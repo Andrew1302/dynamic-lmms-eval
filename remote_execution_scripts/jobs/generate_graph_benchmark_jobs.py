@@ -134,7 +134,9 @@ def _write_conf(
     lines.append(_FOOTER)
 
     path = _OUT_DIR / f"{name}.conf"
-    path.write_text("".join(lines), encoding="utf-8")
+    # newline="\n" prevents Path.write_text from doing platform translation on
+    # Windows — bash + `source` chokes on `export FOO\r` lines.
+    path.write_text("".join(lines), encoding="utf-8", newline="\n")
     return path
 
 
@@ -285,6 +287,7 @@ def main() -> None:
         manifest.write_text(
             "\n".join(f"graph_benchmark/{n}" for n in job_names) + "\n",
             encoding="utf-8",
+            newline="\n",
         )
         total += len(job_names)
         print(f"[batch] {batch_name}: {len(job_names)} jobs -> {manifest}")
