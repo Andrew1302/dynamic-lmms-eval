@@ -17,9 +17,15 @@ REMOTE_WORKDIR="${REMOTE_WORKDIR:-/media/${VM_USER}/ssd1T/andrew/dynamic/dynamic
 # Sibling dynamic-dataset repo. Required by tools/prepare_dynamic_graph_*.py.
 REMOTE_DATASET_DIR="${REMOTE_DATASET_DIR:-/media/${VM_USER}/ssd1T/andrew/dynamic/dynamic-dataset}"
 
-# SSD-backed caches. Home partition can't hold HF models or uv's download cache.
+# SSD-backed caches. Home partition can't hold HF models, uv's download cache,
+# triton compile cache, or generic XDG caches — vllm fills any of them quickly.
 REMOTE_HF_HOME="${REMOTE_HF_HOME:-/media/${VM_USER}/ssd1T/andrew/hf_cache}"
 REMOTE_UV_CACHE_DIR="${REMOTE_UV_CACHE_DIR:-/media/${VM_USER}/ssd1T/andrew/uv_cache}"
+REMOTE_XDG_CACHE_HOME="${REMOTE_XDG_CACHE_HOME:-/media/${VM_USER}/ssd1T/andrew/.cache}"
+REMOTE_TRITON_HOME="${REMOTE_TRITON_HOME:-/media/${VM_USER}/ssd1T/andrew}"
+REMOTE_TRITON_CACHE_DIR="${REMOTE_TRITON_CACHE_DIR:-/media/${VM_USER}/ssd1T/andrew/.triton/cache}"
+REMOTE_TMPDIR="${REMOTE_TMPDIR:-/media/${VM_USER}/ssd1T/andrew/tmp}"
+REMOTE_FLASHINFER_WORKSPACE_BASE="${REMOTE_FLASHINFER_WORKSPACE_BASE:-/media/${VM_USER}/ssd1T/andrew}"
 
 # Where per-run artifacts (logs, metadata) live on the VM.
 REMOTE_RUNS_DIR="${REMOTE_RUNS_DIR:-${REMOTE_WORKDIR}/.runs}"

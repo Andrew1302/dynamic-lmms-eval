@@ -70,10 +70,17 @@ rm -f "\$RUN_DIR/exit_code"
 # both the tmux pane and the log file.
 exec > >(tee -a "\$LOG_PATH") 2>&1
 
-# SSD-backed caches — the VM's home partition is too small for HF models and
-# uv's download cache. These must be set BEFORE any python/uv/accelerate call.
+# SSD-backed caches — the VM's home partition is too small for HF models,
+# uv/triton/flashinfer caches, or generic XDG caches that vllm fills quickly.
+# These must be set BEFORE any python/uv/accelerate call.
 export HF_HOME='${REMOTE_HF_HOME}'
 export UV_CACHE_DIR='${REMOTE_UV_CACHE_DIR}'
+export XDG_CACHE_HOME='${REMOTE_XDG_CACHE_HOME}'
+export TRITON_HOME='${REMOTE_TRITON_HOME}'
+export TRITON_CACHE_DIR='${REMOTE_TRITON_CACHE_DIR}'
+export TMPDIR='${REMOTE_TMPDIR}'
+export FLASHINFER_WORKSPACE_BASE='${REMOTE_FLASHINFER_WORKSPACE_BASE}'
+mkdir -p "\$XDG_CACHE_HOME" "\$TRITON_CACHE_DIR" "\$TMPDIR" "\$FLASHINFER_WORKSPACE_BASE"
 
 # Expose the job name to user launchers so they can derive job-keyed paths
 # (e.g. --output_path ./logs/\$JOB_NAME) instead of hard-coding a name that

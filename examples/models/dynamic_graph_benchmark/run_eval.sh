@@ -67,6 +67,63 @@ case "$MODEL_PRETRAINED" in
 esac
 MODEL_NAME="${MODEL_NAME_OVERRIDE:-$MODEL_NAME}"
 
+# Default model_args follow the registry wrapper's convention. The vllm wrapper
+# uses `model=` instead of `pretrained=` and needs explicit memory tuning to
+# fit on VM03's 12 GiB RTX 4070 (max_model_len cap, eager mode, bf16).
+# A conf can set MODEL_ARGS to override the default verbatim.
+#
+# Thinking control:
+#   - vllm wrapper: chat_template_kwargs={"enable_thinking":false} — official
+#     Qwen3/vllm mechanism, pre-injects empty <think></think> at template time.
+#   - HF wrappers (qwen3_vl etc.): reasoning_prompt="/no_think" — appends the
+#     directive to user content (chat template applied inside the wrapper).
+# Thinking-mode ablation uses *-Thinking model SKUs; we detect that suffix and
+# omit thinking-disable args so the model reasons freely. The task yaml's
+# reasoning_tags + strip_reasoning_tags filter the <think>...</think> block
+# (including the close-only shape Qwen3 chat templates produce) before scoring.
+case "$MODEL_PRETRAINED" in
+    *Thinking*)
+        VLLM_NO_THINK=""
+        HF_NO_THINK=""
+        ;;
+    *)
+        VLLM_NO_THINK=',chat_template_kwargs={"enable_thinking":false}'
+        HF_NO_THINK=",reasoning_prompt=\\n/no_think"
+        ;;
+esac
+
+# Per-model memory tuning. Most fit comfortably; Gemma-4-E2B is mis-marketed —
+# "Effective 2 B" but its total weight on disk is ~9.6 GB, leaving < 1 GiB for
+# KV cache on the 12 GiB RTX 4070. Tighten max_model_len there so the KV cache
+# has any room at all, and shrink max_num_seqs (vllm warms up with 256 dummy
+# concurrent requests by default — wasted memory since we run batch_size=1).
+case "$MODEL_PRETRAINED" in
+    *gemma-4-E2B*|*gemma-4-e2b*)
+        VLLM_GPU_UTIL=0.97
+        VLLM_MAX_MODEL_LEN=4096
+        VLLM_MAX_NUM_SEQS=4
+        ;;
+    *)
+        VLLM_GPU_UTIL=0.93
+        VLLM_MAX_MODEL_LEN=12288
+        VLLM_MAX_NUM_SEQS=256
+        ;;
+esac
+
+VLLM_DEFAULT_ARGS="model=$MODEL_PRETRAINED,gpu_memory_utilization=$VLLM_GPU_UTIL,max_model_len=$VLLM_MAX_MODEL_LEN,max_num_seqs=$VLLM_MAX_NUM_SEQS,enforce_eager=True,dtype=bfloat16,trust_remote_code=True,limit_mm_per_prompt={\"image\":1}${VLLM_NO_THINK}"
+case "$MODEL_NAME" in
+    vllm|vllm_chat)
+        : "${MODEL_ARGS:=$VLLM_DEFAULT_ARGS}" ;;
+    qwen3_vl|qwen2_5_vl|llava_onevision1_5|gemma3)
+        # These HF wrappers expose reasoning_prompt as a named __init__ arg.
+        : "${MODEL_ARGS:=pretrained=$MODEL_PRETRAINED${HF_NO_THINK}}" ;;
+    *)
+        # Non-reasoning wrappers (internvl3_5, minicpm_v, llama_vision):
+        # reasoning_prompt isn't accepted and /no_think wouldn't be recognized
+        # by the model's chat template anyway — pass nothing.
+        : "${MODEL_ARGS:=pretrained=$MODEL_PRETRAINED}" ;;
+esac
+
 echo "[run_eval] job=$JOB_NAME model=$MODEL_NAME pretrained=$MODEL_PRETRAINED"
 echo "[run_eval]   tasks=$TASKS dataset_dir=$DATASET_DIR"
 echo "[run_eval]   label_style=$LABEL_STYLE node_color=$NODE_COLOR edge_style=$EDGE_STYLE adj_matrix=$INCLUDE_ADJ_MATRIX"
@@ -114,10 +171,18 @@ ln -s "$(realpath "$DATASET_DIR")" "$CANONICAL_DATASET"
 
 # --- Step 2: run lmms-eval -----------------------------------------------------
 
+# Thinking-mode ablations need a much larger max_new_tokens than the task yaml's
+# default (sized for short non-thinking answers). Override via --gen_kwargs.
+EXTRA_LMMS_ARGS=()
+case "$MODEL_PRETRAINED" in
+    *Thinking*) EXTRA_LMMS_ARGS+=(--gen_kwargs "max_new_tokens=4096") ;;
+esac
+
 accelerate launch --num_processes=1 --main_process_port=12346 -m lmms_eval \
     --model "$MODEL_NAME" \
-    --model_args "pretrained=$MODEL_PRETRAINED" \
+    --model_args "$MODEL_ARGS" \
     --tasks dynamic_graph_benchmark \
     --batch_size 1 \
     --log_samples \
-    --output_path "./logs/${JOB_NAME}"
+    --output_path "./logs/${JOB_NAME}" \
+    "${EXTRA_LMMS_ARGS[@]}"

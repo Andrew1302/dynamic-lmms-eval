@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -18,6 +19,30 @@ SamplingParams, _ = optional_import("vllm", "SamplingParams")
 WORKERS = int(os.getenv("WORKERS", "32"))
 
 
+def _append_reasoning_prompt(messages: list, directive: str) -> None:
+    """Append `directive` to the trailing text segment of the last user message.
+
+    OpenAI-style content is either a plain string or a list of {type, text|image_url}
+    parts. We mutate in place — the directive (e.g. "/no_think") needs to land at
+    the very end of the user turn for Qwen3's chat template to pick it up.
+    """
+    for msg in reversed(messages):
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content")
+        if isinstance(content, str):
+            msg["content"] = content.rstrip() + directive
+            return
+        if isinstance(content, list):
+            for part in reversed(content):
+                if isinstance(part, dict) and part.get("type") == "text":
+                    part["text"] = part.get("text", "").rstrip() + directive
+                    return
+            content.append({"type": "text", "text": directive.lstrip()})
+            return
+        return
+
+
 @register_model("vllm_chat")
 class VLLM(VLLMSimple):
     is_simple = False
@@ -36,6 +61,8 @@ class VLLM(VLLMSimple):
         min_image_pixels=28,
         fps: Optional[int] = None,
         nframes: Optional[int] = 32,
+        reasoning_prompt: Optional[str] = None,
+        chat_template_kwargs: Optional[dict] = None,
         **kwargs,
     ):
         super().__init__(
@@ -53,6 +80,21 @@ class VLLM(VLLMSimple):
         self.fps = fps
         self.max_pixels = max_pixels
         self.nframes = nframes
+        # Two complementary ways to control thinking for reasoning models:
+        # - reasoning_prompt: appends a text directive like "/no_think" to the
+        #   user message (Qwen3 trained-behavior fallback). Fragile — depends
+        #   on the model recognizing the literal token.
+        # - chat_template_kwargs: forwarded to vllm's chat() so kwargs like
+        #   {"enable_thinking": false} reach jinja's apply_chat_template; this
+        #   is the official Qwen3 mechanism and pre-injects an empty
+        #   <think></think> block at the prompt level.
+        self.reasoning_prompt = reasoning_prompt.replace("\\n", "\n") if reasoning_prompt else None
+        if isinstance(chat_template_kwargs, str):
+            try:
+                chat_template_kwargs = json.loads(chat_template_kwargs)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"chat_template_kwargs must be valid JSON: {chat_template_kwargs!r}") from e
+        self.chat_template_kwargs = chat_template_kwargs or None
 
     def make_one_request(self, request: Instance) -> Tuple[list[dict], dict]:
         """
@@ -84,6 +126,8 @@ class VLLM(VLLMSimple):
         else:
             video_kwargs["nframes"] = self.nframes
         messages = chat_messages.to_openai_messages(video_kwargs=video_kwargs)
+        if self.reasoning_prompt:
+            _append_reasoning_prompt(messages, self.reasoning_prompt)
         return messages, params
 
     def generate_until(self, requests) -> List[GenerationResult]:
@@ -104,11 +148,14 @@ class VLLM(VLLMSimple):
 
             sampling_params = SamplingParams(**sampling_params)
             start_time = time.time()
-            response = self.client.chat(
+            chat_kwargs = dict(
                 sampling_params=sampling_params,
                 messages=batched_messages,
                 chat_template=self.chat_template,
             )
+            if self.chat_template_kwargs is not None:
+                chat_kwargs["chat_template_kwargs"] = self.chat_template_kwargs
+            response = self.client.chat(**chat_kwargs)
             end_time = time.time()
 
             response_text = [o.outputs[0].text for o in response]

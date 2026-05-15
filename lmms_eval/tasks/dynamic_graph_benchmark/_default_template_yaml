@@ -10,13 +10,20 @@ doc_to_text: !function utils.dynamic_graph_benchmark_doc_to_text
 doc_to_target: "answer"
 
 generation_kwargs:
+  # Sized for the non-thinking default: a single integer / short word answer.
+  # Thinking-mode ablations need much more headroom — run_eval.sh passes
+  # `--gen_kwargs max_new_tokens=4096` for *-Thinking model SKUs so the chain
+  # of thought has room to finish before the answer.
   max_new_tokens: 64
   temperature: 0
   top_p: 1.0
   num_beams: 1
   do_sample: false
 
-# Strip <think>...</think> blocks before scoring
+# Strip <think>...</think> blocks before scoring. strip_reasoning_tags also
+# handles the close-only case where Qwen3's chat template auto-injects the
+# opening <think> into the prompt (so the model output starts mid-reasoning
+# and only emits </think>...answer).
 reasoning_tags: [["<think>", "</think>"]]
 
 process_results: !function utils.dynamic_graph_benchmark_process_results

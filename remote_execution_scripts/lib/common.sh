@@ -13,6 +13,13 @@
 
 set -euo pipefail
 
+# Ensure user-local bin is on PATH so non-interactive shells (e.g. run_batch.sh
+# invoked from WSL via `wsl.exe -- bash -c ...`) can find `uv` even though
+# .profile is not sourced. uv installs itself to ~/.local/bin by default.
+if [ -d "$HOME/.local/bin" ] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    export PATH="$HOME/.local/bin:$PATH"
+fi
+
 # --- color helpers (no-op when stdout isn't a TTY) ---------------------------
 if [ -t 1 ]; then
     C_R=$'\033[31m'; C_G=$'\033[32m'; C_Y=$'\033[33m'

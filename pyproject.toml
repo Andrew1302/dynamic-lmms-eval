@@ -76,7 +76,8 @@ dependencies = [
     "math-verify",
     "decord",
     "matplotlib",
-    "accelerate"
+    "accelerate",
+    "vllm==0.19.1",
 ]
 
 [project.optional-dependencies]

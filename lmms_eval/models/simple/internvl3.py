@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from datetime import timedelta
 from typing import List, Optional, Set, Tuple
 
@@ -27,6 +28,50 @@ DEFAULT_GEN_KWARGS = dict(
     max_new_tokens=1024,
     do_sample=False,
 )
+
+
+@contextmanager
+def _force_linspace_on_cpu():
+    # Workaround for InternVL3/3.5 remote modeling code under transformers >= 5.0
+    # (see lmms-eval#1051, OpenGVLab/InternVL#1254). `modeling_intern_vit.py` does
+    # `[x.item() for x in torch.linspace(...)]` with no explicit device; under
+    # `low_cpu_mem_usage=True` the default device is meta, so `.item()` raises.
+    _orig = torch.linspace
+
+    def _patched(*args, **kwargs):
+        kwargs.setdefault("device", "cpu")
+        return _orig(*args, **kwargs)
+
+    torch.linspace = _patched
+    try:
+        yield
+    finally:
+        torch.linspace = _orig
+
+
+@contextmanager
+def _default_all_tied_weights_keys():
+    # Workaround for InternVL3/3.5 remote modeling code under transformers >= 5.0.
+    # `PreTrainedModel.post_init()` sets `self.all_tied_weights_keys`
+    # (modeling_utils.py:1298), but InternVL's `trust_remote_code`
+    # `InternVLChatModel.__init__` skips `post_init()`, so the attribute is missing.
+    # Transformers 5.x's load path (`from_pretrained -> caching_allocator_warmup
+    # -> get_total_byte_count`, modeling_utils.py:4667) accesses it directly and
+    # raises AttributeError before `from_pretrained` returns.
+    from transformers import modeling_utils
+
+    _orig = modeling_utils.caching_allocator_warmup
+
+    def _patched(model, expanded_device_map, hf_quantizer):
+        if not hasattr(model, "all_tied_weights_keys"):
+            model.all_tied_weights_keys = {}
+        return _orig(model, expanded_device_map, hf_quantizer)
+
+    modeling_utils.caching_allocator_warmup = _patched
+    try:
+        yield
+    finally:
+        modeling_utils.caching_allocator_warmup = _orig
 
 
 def build_transform(input_size: int) -> T.Compose:
@@ -276,14 +321,15 @@ class InternVL3(lmms):
             self._device = torch.device(f"cuda:{accelerator.local_process_index}")
             self.device_map = f"cuda:{accelerator.local_process_index}"
 
-        self._model = AutoModel.from_pretrained(
-            self.path,
-            torch_dtype=torch.bfloat16,
-            low_cpu_mem_usage=True,
-            use_flash_attn=use_flash_attn,
-            trust_remote_code=True,
-            device_map=self.device_map,
-        ).eval()
+        with _force_linspace_on_cpu(), _default_all_tied_weights_keys():
+            self._model = AutoModel.from_pretrained(
+                self.path,
+                torch_dtype=torch.bfloat16,
+                low_cpu_mem_usage=True,
+                use_flash_attn=use_flash_attn,
+                trust_remote_code=True,
+                device_map=self.device_map,
+            ).eval()
         self._config = self._model.config
         self._tokenizer = AutoTokenizer.from_pretrained(self.path, trust_remote_code=True, use_fast=False)
 

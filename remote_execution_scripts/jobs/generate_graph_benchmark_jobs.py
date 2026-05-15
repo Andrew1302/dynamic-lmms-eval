@@ -37,7 +37,7 @@ MODELS_4B = [
     Model("qwen3vl_4b",   "Qwen/Qwen3-VL-4B-Instruct"),
     Model("internvl35_4b", "OpenGVLab/InternVL3_5-4B"),
     Model("qwen35_4b",    "Qwen/Qwen3.5-4B"),
-    Model("gemma4_e4b",   "google/gemma-4-E4B-it"),
+    Model("gemma4_e2b",   "google/gemma-4-E2B-it"),
 ]
 
 # Larger panel: only used for the model-size ablation (n=500).
