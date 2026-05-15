@@ -117,8 +117,13 @@ case "$MODEL_NAME" in
     qwen3_vl|qwen2_5_vl|llava_onevision1_5|gemma3)
         # These HF wrappers expose reasoning_prompt as a named __init__ arg.
         : "${MODEL_ARGS:=pretrained=$MODEL_PRETRAINED${HF_NO_THINK}}" ;;
+    internvl3_5)
+        # InternVL3 dynamic-preprocess tiles each image up to max_num times
+        # (default 12 → ~3k vision tokens). On VM03's 12 GiB GPU the 4B/8B
+        # variants OOM during attention softmax mid-run; cap at 6 tiles.
+        : "${MODEL_ARGS:=pretrained=$MODEL_PRETRAINED,max_num=6}" ;;
     *)
-        # Non-reasoning wrappers (internvl3_5, minicpm_v, llama_vision):
+        # Non-reasoning wrappers (minicpm_v, llama_vision):
         # reasoning_prompt isn't accepted and /no_think wouldn't be recognized
         # by the model's chat template anyway — pass nothing.
         : "${MODEL_ARGS:=pretrained=$MODEL_PRETRAINED}" ;;
