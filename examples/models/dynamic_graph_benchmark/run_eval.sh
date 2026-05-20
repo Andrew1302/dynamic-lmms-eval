@@ -50,6 +50,13 @@ set -euo pipefail
 : "${SAMPLES_PER_VALUE:=}"
 : "${SEED:=42}"
 
+# CHUNK_SIZE controls per-chunk row count for resumable runs. 0/unset keeps
+# the original monolithic path: one prepare + one lmms-eval invocation across
+# every row. When > 0, the prepare step pre-shards the dataset under
+# $DATASET_DIR/chunks/, this script iterates the shards, and a re-invocation
+# (after a mid-run failure) skips every chunk already marked done.
+: "${CHUNK_SIZE:=0}"
+
 # Map HF pretrained id to lmms-eval --model registry name.
 case "$MODEL_PRETRAINED" in
     *Qwen3-VL*)                   MODEL_NAME="qwen3_vl" ;;
@@ -138,41 +145,79 @@ else
     echo "[run_eval]   standard: num_samples=$NUM_SAMPLES difficulty=$DIFFICULTY"
 fi
 
+# --- Helpers -------------------------------------------------------------------
+
+_build_prepare_args() {
+    # Echoes the prepare CLI args, one per line, to be read with mapfile.
+    # Centralises the standard-vs-sweep + ablation knob translation so both
+    # the monolithic and chunked code paths produce identical fingerprints.
+    local args=(
+        --seed "$SEED"
+        --tasks $TASKS
+        --output-dir "$DATASET_DIR"
+        --label-style "$LABEL_STYLE"
+        --node-color "$NODE_COLOR"
+        --edge-style "$EDGE_STYLE"
+    )
+    if [ "$INCLUDE_ADJ_MATRIX" = "1" ]; then
+        args+=(--include-adjacency-matrix)
+    fi
+    local ov
+    for ov in $DIFFICULTY_OVERRIDES; do
+        args+=(--difficulty-override "$ov")
+    done
+    if [ -n "$CONSTRAINT" ]; then
+        args+=(--constraint "$CONSTRAINT" --constraint-values "$CONSTRAINT_VALUES")
+        if [ -n "$SAMPLES_PER_VALUE" ]; then
+            args+=(--samples-per-value "$SAMPLES_PER_VALUE")
+        fi
+    else
+        args+=(--num-samples "$NUM_SAMPLES" --difficulty "$DIFFICULTY")
+    fi
+    printf '%s\n' "${args[@]}"
+}
+
+_point_canonical_dataset_at() {
+    # Atomically repoint ./dynamic_graph_benchmark_data → the requested
+    # absolute path. The task yamls always load from the canonical name.
+    local target_abs="$1"
+    local canonical="./dynamic_graph_benchmark_data"
+    if [ -L "$canonical" ] || [ -e "$canonical" ]; then
+        rm -rf "$canonical"
+    fi
+    ln -s "$target_abs" "$canonical"
+}
+
+_run_lmms_eval() {
+    # Invoke lmms-eval into the given --output_path. Extra args (e.g.
+    # --gen_kwargs for thinking SKUs) come from EXTRA_LMMS_ARGS in the
+    # caller's scope.
+    local output_path="$1"
+    accelerate launch --num_processes=1 --main_process_port=12346 -m lmms_eval \
+        --model "$MODEL_NAME" \
+        --model_args "$MODEL_ARGS" \
+        --tasks dynamic_graph_benchmark \
+        --batch_size 1 \
+        --log_samples \
+        --output_path "$output_path" \
+        "${EXTRA_LMMS_ARGS[@]}"
+}
+
 # --- Step 1: generate dataset --------------------------------------------------
 
-PREPARE_ARGS=(
-    --seed "$SEED"
-    --tasks $TASKS
-    --output-dir "$DATASET_DIR"
-    --label-style "$LABEL_STYLE"
-    --node-color "$NODE_COLOR"
-    --edge-style "$EDGE_STYLE"
-)
-if [ "$INCLUDE_ADJ_MATRIX" = "1" ]; then
-    PREPARE_ARGS+=(--include-adjacency-matrix)
-fi
-for ov in $DIFFICULTY_OVERRIDES; do
-    PREPARE_ARGS+=(--difficulty-override "$ov")
-done
+mapfile -t PREPARE_ARGS < <(_build_prepare_args)
 
-if [ -n "$CONSTRAINT" ]; then
-    PREPARE_ARGS+=(--constraint "$CONSTRAINT" --constraint-values "$CONSTRAINT_VALUES")
-    if [ -n "$SAMPLES_PER_VALUE" ]; then
-        PREPARE_ARGS+=(--samples-per-value "$SAMPLES_PER_VALUE")
-    fi
-else
-    PREPARE_ARGS+=(--num-samples "$NUM_SAMPLES" --difficulty "$DIFFICULTY")
+# Chunked mode pre-shards the dataset for resumable runs. RUN_DIR comes from
+# 02_run.sh's launcher (it points at $REMOTE_RUNS_DIR/$JOB_NAME); we fall
+# back to a sibling-of-cwd path when the script is invoked directly (e.g.
+# during local smoke tests).
+if [ "$CHUNK_SIZE" -gt 0 ]; then
+    RUNS_CHUNK_DIR="${RUN_DIR:-./.runs/$JOB_NAME}/chunks"
+    mkdir -p "$RUNS_CHUNK_DIR"
+    PREPARE_ARGS+=(--chunk-size "$CHUNK_SIZE" --reset-status-dir "$RUNS_CHUNK_DIR")
 fi
 
 python tools/prepare_dynamic_graph_benchmark.py "${PREPARE_ARGS[@]}"
-
-# Symlink the per-job dataset dir to the canonical path the lmms-eval
-# task YAMLs reference. Cheaper than parameterising every YAML.
-CANONICAL_DATASET="./dynamic_graph_benchmark_data"
-if [ -L "$CANONICAL_DATASET" ] || [ -e "$CANONICAL_DATASET" ]; then
-    rm -rf "$CANONICAL_DATASET"
-fi
-ln -s "$(realpath "$DATASET_DIR")" "$CANONICAL_DATASET"
 
 # --- Step 2: run lmms-eval -----------------------------------------------------
 
@@ -183,11 +228,94 @@ case "$MODEL_PRETRAINED" in
     *Thinking*) EXTRA_LMMS_ARGS+=(--gen_kwargs "max_new_tokens=4096") ;;
 esac
 
-accelerate launch --num_processes=1 --main_process_port=12346 -m lmms_eval \
-    --model "$MODEL_NAME" \
-    --model_args "$MODEL_ARGS" \
-    --tasks dynamic_graph_benchmark \
-    --batch_size 1 \
-    --log_samples \
-    --output_path "./logs/${JOB_NAME}" \
-    "${EXTRA_LMMS_ARGS[@]}"
+if [ "$CHUNK_SIZE" -le 0 ]; then
+    # Monolithic path: one symlink, one lmms-eval invocation. Identical to
+    # pre-chunking behaviour.
+    _point_canonical_dataset_at "$(realpath "$DATASET_DIR")"
+    _run_lmms_eval "./logs/${JOB_NAME}"
+    exit 0
+fi
+
+# Chunked path. Walk the TOC produced by prepare; for each chunk, point the
+# canonical dataset symlink at its slice and run lmms-eval into its own
+# output dir. Status sentinels under $RUNS_CHUNK_DIR drive resume.
+
+TOC_PATH="$DATASET_DIR/chunks/chunks.toc.json"
+if [ ! -f "$TOC_PATH" ]; then
+    echo "[run_eval] FATAL: chunks TOC missing at $TOC_PATH despite CHUNK_SIZE=$CHUNK_SIZE" >&2
+    exit 2
+fi
+
+# Read chunk names + n_chunks via a tiny python helper. Avoids a jq dep.
+mapfile -t CHUNK_NAMES < <(python -c "
+import json, sys
+with open('$TOC_PATH') as f:
+    toc = json.load(f)
+for c in toc['chunks']:
+    print(c['name'])
+")
+N_CHUNKS="${#CHUNK_NAMES[@]}"
+echo "[run_eval] chunked mode: $N_CHUNKS chunks (CHUNK_SIZE=$CHUNK_SIZE) — state under $RUNS_CHUNK_DIR"
+
+for chunk in "${CHUNK_NAMES[@]}"; do
+    status_file="$RUNS_CHUNK_DIR/${chunk}.status"
+    if [ -f "$status_file" ] && [ "$(cat "$status_file")" = "done" ]; then
+        echo "[run_eval] $chunk: already done — skipping"
+        continue
+    fi
+
+    chunk_out="./logs/${JOB_NAME}/chunks/${chunk}"
+    # Wipe any partial output left behind by a previous failed/in-progress run
+    # of this chunk so we don't end up with two timestamps under the same
+    # chunk dir (would confuse the merger's TOC-order pass).
+    rm -rf "$chunk_out"
+
+    echo "in_progress" > "$status_file"
+    _point_canonical_dataset_at "$(realpath "$DATASET_DIR/chunks/$chunk")"
+
+    echo "[run_eval] $chunk: running lmms-eval → $chunk_out"
+    if _run_lmms_eval "$chunk_out"; then
+        # lmms-eval's cli_evaluate catches exceptions and returns 0 even when
+        # the chunk crashed mid-run (CUDA OOM, dataset load failure, etc.).
+        # Verify at least one *_samples_*.jsonl was written before trusting
+        # the success; otherwise mark failed and abort so resume re-runs it
+        # instead of silently dropping a chunk.
+        jsonl_count=$(find "$chunk_out" -name "*_samples_*.jsonl" 2>/dev/null | wc -l)
+        if [ "$jsonl_count" -eq 0 ]; then
+            echo "failed:no_output" > "$status_file"
+            echo "[run_eval] $chunk: lmms-eval exited 0 but wrote no *_samples_*.jsonl files — treating as failure; re-run ./02_run.sh to retry" >&2
+            exit 1
+        fi
+        echo "done" > "$status_file"
+    else
+        rc=$?
+        echo "failed:$rc" > "$status_file"
+        echo "[run_eval] $chunk: lmms-eval exited $rc — aborting; re-run ./02_run.sh to resume" >&2
+        exit "$rc"
+    fi
+done
+
+# --- Step 3: merge per-chunk logs ---------------------------------------------
+
+# Produce one timestamped log dir per (model_dir, task) so the existing
+# postprocess scripts (06_compare_direct_disguise.sh, 07_batch_report.sh)
+# see a shape identical to a non-chunked run.
+MERGE_STATUS="$RUNS_CHUNK_DIR/merge.status"
+if [ ! -f "$MERGE_STATUS" ] || [ "$(cat "$MERGE_STATUS")" != "done" ]; then
+    echo "in_progress" > "$MERGE_STATUS"
+    echo "[run_eval] merging $N_CHUNKS chunks into ./logs/${JOB_NAME}"
+    if python tools/postprocess/merge_chunked_run.py \
+        --job-dir "./logs/${JOB_NAME}" \
+        --toc "$TOC_PATH"; then
+        echo "done" > "$MERGE_STATUS"
+    else
+        rc=$?
+        echo "failed:$rc" > "$MERGE_STATUS"
+        echo "[run_eval] merge step exited $rc" >&2
+        exit "$rc"
+    fi
+else
+    echo "[run_eval] merge already done — skipping"
+fi
+
+echo "[run_eval] all chunks merged; results under ./logs/${JOB_NAME}"

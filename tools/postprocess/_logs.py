@@ -110,5 +110,13 @@ def iter_rows(jsonl_paths: Iterable[Path], job_label: str) -> Iterator[SampleRow
 
 
 def find_sample_jsonls(root: Path) -> list[Path]:
-    """All ``*_samples_<task>.jsonl`` under ``root`` (recursive)."""
-    return sorted(p for p in root.rglob("*_samples_*.jsonl") if SAMPLES_RE.match(p.name))
+    """All ``*_samples_<task>.jsonl`` under ``root`` (recursive).
+
+    Excludes per-chunk outputs under ``chunks/`` — those are inputs to the
+    merge step, not authoritative results. The merge writes the combined
+    file to ``<job>/<model_dir>/`` which is what callers want here.
+    """
+    return sorted(
+        p for p in root.rglob("*_samples_*.jsonl")
+        if SAMPLES_RE.match(p.name) and "chunks" not in p.parts
+    )

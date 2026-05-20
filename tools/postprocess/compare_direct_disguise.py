@@ -55,9 +55,18 @@ def parse_pair(spec: str) -> tuple[str, str, str]:
 
 
 def find_samples(results_dir: Path) -> dict[str, list[tuple[str, Path]]]:
-    """Map task name → list of (timestamp, path) pairs found under results_dir."""
+    """Map task name → list of (timestamp, path) pairs found under results_dir.
+
+    Per-chunk samples written by chunked runs (under ``chunks/chunk_NNNN/``)
+    are excluded — ``merge_chunked_run.py`` concatenates them into the
+    canonical ``<job>/<model_dir>/`` layout, and including the per-chunk
+    files would let ``pick_timestamp`` select a single chunk's ~hundreds of
+    rows instead of the merged 5k.
+    """
     out: dict[str, list[tuple[str, Path]]] = defaultdict(list)
     for path in results_dir.rglob("*_samples_*.jsonl"):
+        if "chunks" in path.parts:
+            continue
         m = SAMPLES_RE.match(path.name)
         if m:
             out[m.group("task")].append((m.group("ts"), path))

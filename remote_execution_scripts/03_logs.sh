@@ -86,8 +86,26 @@ REMOTE
         ;;
     until-done)
         log "polling tmux session '$SESSION' every ${POLL_S}s until it ends"
-        while ssh_cmd "tmux has-session -t '$SESSION' 2>/dev/null"; do
-            sleep "$POLL_S"
+        # Distinguish "tmux session ended" (rc=1) from "ssh transport failed"
+        # (rc=255 typically). A bare `while ssh_cmd ...` exits on both, which
+        # made the watcher return prematurely on any network blip and let
+        # downstream callers (run_batch.sh) launch the next job on top of a
+        # still-running tmux session — causing GPU contention.
+        while true; do
+            probe_rc=0
+            ssh_cmd "tmux has-session -t '$SESSION' 2>/dev/null" || probe_rc=$?
+            if [ "$probe_rc" -eq 0 ]; then
+                sleep "$POLL_S"
+            elif [ "$probe_rc" -eq 1 ]; then
+                # tmux confirmed session is gone — exit the loop cleanly.
+                break
+            else
+                # Transport error (ssh exit 255, network reset, etc.). Retry
+                # rather than treating it as end-of-job. Print so the operator
+                # can see if blips become persistent.
+                log "ssh probe returned $probe_rc (transport error?), retrying after ${POLL_S}s"
+                sleep "$POLL_S"
+            fi
         done
         log "session ended; dumping final tail + exit sentinel"
         ssh_cmd "bash -s" <<REMOTE

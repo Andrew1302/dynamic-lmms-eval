@@ -211,6 +211,55 @@ After every job in a batch has been fetched, run
 `./07_batch_report.sh -f batches/<name>.txt` to consolidate the run into one
 xlsx (see above).
 
+## Resumable chunked runs (dynamic_graph_benchmark)
+
+Long monolithic runs are fragile — a single mid-run CUDA OOM, vllm engine
+hiccup, or VM reboot loses everything. The `dynamic_graph_benchmark` runner
+(`examples/models/dynamic_graph_benchmark/run_eval.sh`) supports a
+**chunked**, **resumable** mode driven by one env var on the job conf:
+
+```bash
+export CHUNK_SIZE=2000   # rows per lmms-eval invocation; 0/unset = monolithic
+```
+
+When `CHUNK_SIZE > 0`:
+
+1. `tools/prepare_dynamic_graph_benchmark.py` writes the dataset **and**
+   pre-shards it under `${DATASET_DIR}/chunks/chunk_NNNN/` plus a
+   `chunks.toc.json` index. Chunk boundaries are pair-aligned so a
+   `direct`/`disguise` pair is never split. A `prepare_meta.json`
+   fingerprint at `${DATASET_DIR}/prepare_meta.json` makes the prepare
+   step **idempotent**: a re-run with identical args reuses the on-disk
+   dataset without regenerating.
+2. `run_eval.sh` iterates the TOC, points `./dynamic_graph_benchmark_data`
+   at each chunk, and invokes `lmms-eval` into a chunk-scoped output
+   dir `logs/${JOB_NAME}/chunks/chunk_NNNN/`. Each chunk writes a
+   completion sentinel `${RUN_DIR}/chunks/chunk_NNNN.status` (`done` /
+   `failed:<rc>` / `in_progress`).
+3. After every chunk is `done`, `tools/postprocess/merge_chunked_run.py`
+   concatenates the per-chunk `*_samples_<task>.jsonl` files into
+   `logs/${JOB_NAME}/<model_dir>/<merge_ts>_samples_<task>.jsonl`, so
+   `06_compare_direct_disguise.sh` and `07_batch_report.sh` see the
+   single-timestamp shape they expect.
+
+**Resume on failure.** The mechanism is just `./02_run.sh <job>` again.
+The fresh tmux session re-enters `run_eval.sh`; prepare sees its
+fingerprint matches and exits as a no-op; the chunk loop skips chunks
+already marked `done` and retries the first failed/pending one.
+Per-chunk lmms-eval invocations pay one vllm warmup each, so
+`CHUNK_SIZE` should be picked to amortise that (the generator uses
+2000 for standard runs, 500 for ablations).
+
+**Forcing a full restart.** Change any prepare fingerprint input (e.g.
+bump `SEED`, change `NUM_SAMPLES`, edit a knob) — prepare detects the
+mismatch, regenerates the dataset, and clears stale `*.status` files
+under `${RUN_DIR}/chunks/`. Wiping `${DATASET_DIR}/prepare_meta.json`
+manually forces the same effect.
+
+The generator (`jobs/generate_graph_benchmark_jobs.py`) sets a sensible
+`CHUNK_SIZE` for every batch class — see the `CHUNK_*` constants at the
+top of the file.
+
 ## How it works
 
 - **Session naming.** The tmux session is `lmms_<job_name>` so only one run per

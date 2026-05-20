@@ -167,12 +167,19 @@ def collect_paired_job(
         sum_paired_correct += totals["paired_correct"]
         sum_paired_total += totals["n_paired"]
 
+    # n_samples is the per-pair count, not the cross-pair sum. Each pair-task
+    # (coloring/directed_connectivity/shortest_path) evaluates the *same*
+    # 5k graph instances independently, so summing across pairs would
+    # triple-count the same samples. All pairs are expected to share the
+    # same n_paired; we report the max and trust the per_task breakdown
+    # to surface any divergence.
+    n_per_pair = max((row["n_samples"] for row in consolidated), default=0)
     summary_partial = {
         "per_task": per_task_acc,
         "overall_direct_acc": round(sum_direct_correct / (sum_direct_total or 1), 4),
         "overall_disguise_acc": round(sum_disguise_correct / (sum_disguise_total or 1), 4),
         "overall_paired_acc": round(sum_paired_correct / (sum_paired_total or 1), 4),
-        "n_samples": sum_paired_total,
+        "n_samples": n_per_pair,
     }
     return summary_partial, consolidated, picked_ts
 

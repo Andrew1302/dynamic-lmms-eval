@@ -28,26 +28,26 @@ _BATCH_DIR = _HERE.parent / "batches"
 
 @dataclasses.dataclass(frozen=True)
 class Model:
-    short: str          # used in JOB_NAME / DATASET_DIR
-    pretrained: str     # HF id
+    short: str  # used in JOB_NAME / DATASET_DIR
+    pretrained: str  # HF id
 
 
 # Primary panel: small-enough to fit on the eval VMs.
 MODELS_4B = [
-    Model("qwen3vl_4b",   "Qwen/Qwen3-VL-4B-Instruct"),
+    Model("qwen3vl_4b", "Qwen/Qwen3-VL-4B-Instruct"),
     Model("internvl35_4b", "OpenGVLab/InternVL3_5-4B"),
-    Model("qwen35_4b",    "Qwen/Qwen3.5-4B"),
-    Model("gemma4_e2b",   "google/gemma-4-E2B-it"),
+    Model("qwen35_4b", "Qwen/Qwen3.5-4B"),
+    Model("gemma4_e2b", "google/gemma-4-E2B-it"),
 ]
 
 # Larger panel: only used for the model-size ablation (n=500).
 MODELS_8B = [
-    Model("qwen3vl_8b",    "Qwen/Qwen3-VL-8B-Instruct"),
+    Model("qwen3vl_8b", "Qwen/Qwen3-VL-8B-Instruct"),
     Model("internvl35_8b", "OpenGVLab/InternVL3_5-8B"),
     Model("llava_ov15_8b", "lmms-lab/LLaVA-OneVision-1.5-8B"),
-    Model("minicpmv_2_6",  "openbmb/MiniCPM-V-2_6"),
+    Model("minicpmv_2_6", "openbmb/MiniCPM-V-2_6"),
     Model("llama32_v_11b", "meta-llama/Llama-3.2-11B-Vision-Instruct"),
-    Model("qwen35_9b",     "Qwen/Qwen3.5-9B"),
+    Model("qwen35_9b", "Qwen/Qwen3.5-9B"),
 ]
 
 # Thinking-mode SKUs (paired against their -Instruct counterparts).
@@ -70,6 +70,16 @@ SWEEP_NODE_VALUES = "3..14"
 SWEEP_NODE_SPV = 250
 SWEEP_EDGE_VALUES = "3,5,8,12,18,25,35"  # log-ish, covers easy..hard
 SWEEP_EDGE_SPV = 100
+
+# Chunking. CHUNK_SIZE rows per lmms-eval invocation; sentinels under
+# $RUN_DIR/chunks/ let a re-run of ./02_run.sh resume from the first
+# failed/pending chunk. 0 = no chunking. Values must be even to keep
+# direct/disguise pairs together (prepare bumps odd values up by 1).
+# Standard 5k runs amortise model-load overhead better at higher chunk
+# sizes; small ablation runs stay effectively monolithic at 500.
+CHUNK_STANDARD = 500
+CHUNK_ABLATION = 100
+CHUNK_SWEEP = 200
 
 
 _PREAMBLE = """\
@@ -129,8 +139,8 @@ def _write_conf(
     lines.append(f'DATASET_DIR="./dataset_{name}"\n')
     for k, v in env.items():
         lines.append(f'export {k}="{v}"\n')
-    lines.append('export DATASET_DIR\n')
-    lines.append('export JOB_NAME\n')
+    lines.append("export DATASET_DIR\n")
+    lines.append("export JOB_NAME\n")
     lines.append(_FOOTER)
 
     path = _OUT_DIR / f"{name}.conf"
@@ -140,7 +150,7 @@ def _write_conf(
     return path
 
 
-def _standard_env(num_samples: int) -> dict[str, str]:
+def _standard_env(num_samples: int, chunk_size: int) -> dict[str, str]:
     return {
         "NUM_SAMPLES": str(num_samples),
         "DIFFICULTY": DIFFICULTY,
@@ -150,6 +160,7 @@ def _standard_env(num_samples: int) -> dict[str, str]:
         "NODE_COLOR": "#AED6F1",
         "EDGE_STYLE": "straight",
         "INCLUDE_ADJ_MATRIX": "0",
+        "CHUNK_SIZE": str(chunk_size),
     }
 
 
@@ -163,7 +174,7 @@ def main() -> None:
     batches["standard_4b"] = []
     for m in MODELS_4B:
         name = f"graph_bench_standard_{m.short}"
-        env = _standard_env(STANDARD_N)
+        env = _standard_env(STANDARD_N, CHUNK_STANDARD)
         env["MODEL_PRETRAINED"] = m.pretrained
         _write_conf(
             name=name,
@@ -177,7 +188,7 @@ def main() -> None:
     for style in ("letters", "none"):
         for m in MODELS_4B:
             name = f"graph_bench_ablation_labels_{style}_{m.short}"
-            env = _standard_env(ABLATION_N)
+            env = _standard_env(ABLATION_N, CHUNK_ABLATION)
             env["MODEL_PRETRAINED"] = m.pretrained
             env["LABEL_STYLE"] = style
             _write_conf(
@@ -192,7 +203,7 @@ def main() -> None:
     alt_color = "#F1948A"
     for m in MODELS_4B:
         name = f"graph_bench_ablation_color_{m.short}"
-        env = _standard_env(ABLATION_N)
+        env = _standard_env(ABLATION_N, CHUNK_ABLATION)
         env["MODEL_PRETRAINED"] = m.pretrained
         env["NODE_COLOR"] = alt_color
         _write_conf(
@@ -206,7 +217,7 @@ def main() -> None:
     batches["ablation_adjmatrix"] = []
     for m in MODELS_4B:
         name = f"graph_bench_ablation_adjmatrix_{m.short}"
-        env = _standard_env(ABLATION_N)
+        env = _standard_env(ABLATION_N, CHUNK_ABLATION)
         env["MODEL_PRETRAINED"] = m.pretrained
         env["INCLUDE_ADJ_MATRIX"] = "1"
         _write_conf(
@@ -220,7 +231,7 @@ def main() -> None:
     batches["ablation_thinking"] = []
     for m in MODELS_THINKING:
         name = f"graph_bench_ablation_thinking_{m.short}"
-        env = _standard_env(ABLATION_N)
+        env = _standard_env(ABLATION_N, CHUNK_ABLATION)
         env["MODEL_PRETRAINED"] = m.pretrained
         _write_conf(
             name=name,
@@ -233,7 +244,7 @@ def main() -> None:
     batches["ablation_model_size"] = []
     for m in MODELS_8B:
         name = f"graph_bench_ablation_size_{m.short}"
-        env = _standard_env(ABLATION_N)
+        env = _standard_env(ABLATION_N, CHUNK_ABLATION)
         env["MODEL_PRETRAINED"] = m.pretrained
         _write_conf(
             name=name,
@@ -246,7 +257,9 @@ def main() -> None:
     batches["sweep_nodes"] = []
     for m in MODELS_4B:
         name = f"graph_bench_sweep_nodes_{m.short}"
-        env = _standard_env(ABLATION_N)  # NUM_SAMPLES ignored in sweep mode
+        env = _standard_env(
+            ABLATION_N, CHUNK_SWEEP
+        )  # NUM_SAMPLES ignored in sweep mode
         env["MODEL_PRETRAINED"] = m.pretrained
         env["CONSTRAINT"] = "nodes"
         env["CONSTRAINT_VALUES"] = SWEEP_NODE_VALUES
@@ -264,7 +277,7 @@ def main() -> None:
     batches["sweep_edges"] = []
     for m in MODELS_4B:
         name = f"graph_bench_sweep_edges_{m.short}"
-        env = _standard_env(ABLATION_N)
+        env = _standard_env(ABLATION_N, CHUNK_SWEEP)
         env["MODEL_PRETRAINED"] = m.pretrained
         env["CONSTRAINT"] = "edges"
         env["CONSTRAINT_VALUES"] = SWEEP_EDGE_VALUES
@@ -292,8 +305,10 @@ def main() -> None:
         total += len(job_names)
         print(f"[batch] {batch_name}: {len(job_names)} jobs -> {manifest}")
 
-    print(f"\nWrote {total} conf files under {_OUT_DIR}/ and "
-          f"{len(batches)} batch manifests under {_BATCH_DIR}/.")
+    print(
+        f"\nWrote {total} conf files under {_OUT_DIR}/ and "
+        f"{len(batches)} batch manifests under {_BATCH_DIR}/."
+    )
 
 
 if __name__ == "__main__":

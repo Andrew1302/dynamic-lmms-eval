@@ -87,6 +87,11 @@ mkdir -p "\$XDG_CACHE_HOME" "\$TRITON_CACHE_DIR" "\$TMPDIR" "\$FLASHINFER_WORKSP
 # drifts from the .conf and produces orphaned result trees.
 export JOB_NAME='${JOB_NAME}'
 
+# Per-run state dir under \$REMOTE_RUNS_DIR — runners use this for resumable
+# chunk-completion sentinels (see run_eval.sh's chunked path). Exported here
+# so the runner doesn't have to re-derive the layout.
+export RUN_DIR='${RUN_DIR}'
+
 # Job-specific env vars forwarded from the .conf (MODEL_PRETRAINED,
 # NUM_SAMPLES, DIFFICULTY, etc.). Computed by load_job; quoted via printf %q.
 ${JOB_EXPORTS_BLOCK}
