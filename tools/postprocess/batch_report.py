@@ -202,7 +202,7 @@ def collect_sweep_job(
     buckets: dict[tuple[str, str, int], list[int]] = defaultdict(list)
     total_direct = [0, 0]      # [correct, n]
     total_disguise = [0, 0]
-    for row in iter_rows(paths, job_label=job_name):
+    for row in iter_rows(paths, job_label=job_name, dataset_root=results_dir):
         key = (row.base_task, row.variant, row.constraint_value)
         buckets[key].append(row.correct)
         if row.variant == "direct":
@@ -352,6 +352,44 @@ def _write_sweep_tab(ws, long_rows: list[dict]) -> None:
     autosize(ws)
 
 
+def _write_sweep_pivot_tab(
+    ws,
+    pivot: dict[tuple[str, str, int], dict[str, tuple[float, int]]],
+    model_order: list[str],
+    x_header: str,
+) -> None:
+    """Cross-model comparison: one row per (base_task, variant, x), one column
+    per model. Each cell is the model's accuracy at that constraint value;
+    ``n`` shows the median sample count across models (rejection sampling can
+    make per-model n drift for sweep_edges)."""
+    headers = ["base_task", "variant", x_header, "n", *model_order]
+    ws.append(headers)
+    style_header_row(ws)
+    acc_cols = set(model_order)
+    for key in sorted(pivot.keys()):
+        base, variant, x = key
+        cells = pivot[key]
+        ns = sorted(n for _, n in cells.values())
+        median_n = ns[len(ns) // 2] if ns else 0
+        row = [base, variant, x, median_n]
+        for model in model_order:
+            row.append(cells.get(model, (None, 0))[0] if model in cells else "")
+        ws.append(row)
+        r = ws.max_row
+        for idx, h in enumerate(headers, start=1):
+            cell = ws.cell(row=r, column=idx)
+            cell.border = CELL_BORDER
+            if h in acc_cols and isinstance(cell.value, (int, float)):
+                write_accuracy_cell(cell, float(cell.value))
+            elif h in {x_header, "n"}:
+                cell.number_format = "#,##0"
+                cell.alignment = CENTER
+            else:
+                cell.alignment = LEFT
+    ws.freeze_panes = "E2"
+    autosize(ws)
+
+
 def _safe_sheet_title(name: str, used: set[str]) -> str:
     # Strip the redundant `graph_bench_` prefix; otherwise the model suffix
     # gets cut off by Excel's 31-char limit.
@@ -444,6 +482,9 @@ def main(argv: list[str] | None = None) -> int:
 
     summary_rows: list[dict] = []
     per_job_sheets: list[tuple[str, str, list[dict]]] = []  # (sheet_title, kind, rows)
+    # For sweep batches: (base_task, variant, x) -> { model_short: (accuracy, n) }
+    sweep_pivot: dict[tuple[str, str, int], dict[str, tuple[float, int]]] = {}
+    sweep_constraints: set[str] = set()
 
     for job in _read_jobs_tsv(args.jobs_tsv):
         job_id = job["job_id"]
@@ -496,6 +537,12 @@ def main(argv: list[str] | None = None) -> int:
                         timestamp_override=picked_ts,
                     )
                     per_job_sheets.append((job_name, "sweep", long_rows))
+                    sweep_constraints.add(job["constraint"])
+                    for r in long_rows:
+                        key = (r["base_task"], r["variant"], r["x"])
+                        sweep_pivot.setdefault(key, {})[meta["model_short"]] = (
+                            r["accuracy"], r["n"],
+                        )
                 else:
                     per_job_sheets.append((job_name, "consolidated", consolidated))
             else:
@@ -507,6 +554,13 @@ def main(argv: list[str] | None = None) -> int:
                     timestamp_override=timestamp_override,
                 )
                 per_job_sheets.append((job_name, "sweep", long_rows))
+                if job["constraint"]:
+                    sweep_constraints.add(job["constraint"])
+                    for r in long_rows:
+                        key = (r["base_task"], r["variant"], r["x"])
+                        sweep_pivot.setdefault(key, {})[meta["model_short"]] = (
+                            r["accuracy"], r["n"],
+                        )
         except (FileNotFoundError, SystemExit, KeyError) as exc:
             msg = f"[batch_report] {job_id}: NO_DATA ({exc})"
             if strict:
@@ -532,6 +586,17 @@ def main(argv: list[str] | None = None) -> int:
     _write_summary(ws, summary_rows, base_tasks)
 
     used: set[str] = {"summary"}
+
+    # Cross-model sweep pivot — only when the batch is a homogeneous sweep
+    # (a single constraint axis) and at least two models contributed data.
+    if len(sweep_constraints) == 1 and sweep_pivot:
+        models_with_data = {m for cells in sweep_pivot.values() for m in cells}
+        if len(models_with_data) >= 2:
+            model_order = [r["model"] for r in summary_rows if r["model"] in models_with_data]
+            constraint = next(iter(sweep_constraints))
+            pivot_ws = wb.create_sheet(title="sweep")
+            _write_sweep_pivot_tab(pivot_ws, sweep_pivot, model_order, x_header=constraint)
+            used.add("sweep")
     # Per-job tabs in the same order as the summary sheet.
     sheet_by_job = {name: (kind, rows) for name, kind, rows in per_job_sheets}
     for row in summary_rows:

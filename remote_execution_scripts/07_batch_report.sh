@@ -119,8 +119,11 @@ if [ "$STRICT" -eq 1 ]; then STRICT_FLAG=(--strict); fi
 TS_FLAG=()
 if [ -n "$TIMESTAMP" ]; then TS_FLAG=(--timestamp "$TIMESTAMP"); fi
 
-# --no-project + --with keeps this lightweight (openpyxl only, no torch).
-( cd "$REPO_ROOT" && uv run --no-project --with openpyxl python \
+# --no-project + --with keeps this lightweight. `datasets` powers the
+# legacy-jsonl fallback in _logs._build_doc_lookup (older runs didn't surface
+# constraint_value in process_results, so we reconstruct it from the cached
+# HF dataset). New runs don't need the fallback but the import is cheap.
+( cd "$REPO_ROOT" && uv run --no-project --with openpyxl --with datasets python \
     "$REPO_ROOT/tools/postprocess/batch_report.py" \
     --jobs-tsv "$TMPTSV" \
     --output "$OUTPUT" \

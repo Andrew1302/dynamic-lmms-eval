@@ -95,7 +95,20 @@ def dynamic_graph_benchmark_process_results(doc, results):
     norm_gt = _normalize_answer(answer, task)
 
     score = 1.0 if norm_pred == norm_gt else 0.0
-    return {"accuracy": {"task": task, "variant": variant, "score": score}}
+    return {
+        "accuracy": {
+            "task": task,
+            "variant": variant,
+            "score": score,
+            # lmms-eval strips most doc fields from the saved jsonl; surface
+            # the axis info here so post-hoc reports can pivot per constraint
+            # value without round-tripping through the cached HF dataset.
+            "n_vertices": int(doc.get("n_vertices", 0) or 0),
+            "n_edges": int(doc.get("n_edges", 0) or 0),
+            "constraint": str(doc.get("constraint", "") or ""),
+            "constraint_value": int(doc.get("constraint_value", -1) or -1),
+        }
+    }
 
 
 def dynamic_graph_benchmark_aggregate_results(results):
