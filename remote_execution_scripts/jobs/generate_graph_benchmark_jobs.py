@@ -33,8 +33,9 @@ class Model:
 
 
 # Primary panel: small-enough to fit on the eval VMs.
+# Trimmed to the three models the current campaign cares about
+# (Qwen3.5-4B, InternVL3.5-4B, Gemma-4-E2B/"2B"). Add back others here.
 MODELS_4B = [
-    Model("qwen3vl_4b", "Qwen/Qwen3-VL-4B-Instruct"),
     Model("internvl35_4b", "OpenGVLab/InternVL3_5-4B"),
     Model("qwen35_4b", "Qwen/Qwen3.5-4B"),
     Model("gemma4_e2b", "google/gemma-4-E2B-it"),
@@ -63,11 +64,25 @@ TASKS = "coloring directed_connectivity shortest_path"
 DIFFICULTY = "medium"
 DIFFICULTY_OVERRIDES = "shortest_path=easy"
 
+# Difficulty-separated standard runs: one job per (difficulty, model), n=500
+# generations/task (→ 1500 direct + 1500 disguise rows). Each difficulty is
+# pure — every task is rendered at that difficulty (no per-task override), so
+# the three runs form a clean easy→medium→hard gradient.
+STANDARD_DIFFICULTIES = ("easy", "medium", "hard")
+STANDARD_DIFF_N = 500
+
+# Adjacency-list ablation: same difficulty-separated layout as the standard
+# runs but a lighter n=100/task (the ablation only needs to detect a shift,
+# not estimate accuracy tightly). The dynamic-dataset INCLUDE_ADJ_MATRIX flag
+# now renders a text adjacency *list* (see dynamic-dataset "replace adj matrix
+# with adj list").
+ADJLIST_DIFF_N = 100
+
 # Sweep config. Node ranges cover the union of the three difficulty
 # presets (3..14 across tasks). Edge values are picked to span the
 # observed edge-count ranges seen in the three difficulties.
 SWEEP_NODE_VALUES = "3..14"
-SWEEP_NODE_SPV = 250
+SWEEP_NODE_SPV = 100
 SWEEP_EDGE_VALUES = "3,5,8,12,18,25,35"  # log-ish, covers easy..hard
 SWEEP_EDGE_SPV = 100
 
@@ -116,13 +131,26 @@ _FOOTER = textwrap.dedent("""\
         "${DATASET_DIR}"
         "${DATASET_DIR}_images"
     )
-
-    COMPARE_PAIRS=(
-        "coloring:dynamic_graph_benchmark_coloring_direct:dynamic_graph_benchmark_coloring_disguise"
-        "directed_connectivity:dynamic_graph_benchmark_directed_connectivity_direct:dynamic_graph_benchmark_directed_connectivity_disguise"
-        "shortest_path:dynamic_graph_benchmark_shortest_path_direct:dynamic_graph_benchmark_shortest_path_disguise"
-    )
 """)
+
+
+def _compare_pairs_block(tasks: str) -> str:
+    """Build a COMPARE_PAIRS bash array covering only the job's TASKS.
+
+    07_batch_report.sh's collect_paired_job indexes by_task_ts for *every*
+    referenced pair, so a pair whose task produced no jsonl raises KeyError
+    and the whole job is dropped as NO_DATA. Coloring-only jobs therefore
+    must reference only the coloring pair. The spec format is uniform:
+    ``<task>:dynamic_graph_benchmark_<task>_direct:..._disguise``.
+    """
+    lines = ["\nCOMPARE_PAIRS=("]
+    for t in tasks.split():
+        lines.append(
+            f'    "{t}:dynamic_graph_benchmark_{t}_direct:'
+            f'dynamic_graph_benchmark_{t}_disguise"'
+        )
+    lines.append(")\n")
+    return "\n".join(lines)
 
 
 def _write_conf(
@@ -142,6 +170,11 @@ def _write_conf(
     lines.append("export DATASET_DIR\n")
     lines.append("export JOB_NAME\n")
     lines.append(_FOOTER)
+    # COMPARE_PAIRS is derived from the job's TASKS so single-task jobs (e.g.
+    # the coloring re-run) don't reference pairs with no data — see
+    # _compare_pairs_block. TASKS defaults to all three tasks via _standard_env.
+    tasks = env.get("TASKS", "coloring directed_connectivity shortest_path")
+    lines.append(_compare_pairs_block(tasks))
 
     path = _OUT_DIR / f"{name}.conf"
     # newline="\n" prevents Path.write_text from doing platform translation on
@@ -170,18 +203,51 @@ def main() -> None:
 
     batches: dict[str, list[str]] = {}
 
-    # --- Standard jobs: n=5000, defaults, 4B panel ----------------------------
-    batches["standard_4b"] = []
-    for m in MODELS_4B:
-        name = f"graph_bench_standard_{m.short}"
-        env = _standard_env(STANDARD_N, CHUNK_STANDARD)
-        env["MODEL_PRETRAINED"] = m.pretrained
-        _write_conf(
-            name=name,
-            description=f"Standard run (n={STANDARD_N}, defaults) for {m.pretrained}",
-            env=env,
-        )
-        batches["standard_4b"].append(name)
+    # --- Standard jobs: difficulty-separated, n=500/task, 4B panel ------------
+    # One job per (difficulty, model): graph_bench_standard_<difficulty>_<model>.
+    # Ordered difficulty-major so the batch runs easy→medium→hard.
+    batches["standard"] = []
+    for diff in STANDARD_DIFFICULTIES:
+        for m in MODELS_4B:
+            name = f"graph_bench_standard_{diff}_{m.short}"
+            env = _standard_env(STANDARD_DIFF_N, CHUNK_STANDARD)
+            env["DIFFICULTY"] = diff
+            # Pure per-difficulty: every task rendered at this difficulty.
+            env.pop("DIFFICULTY_OVERRIDES", None)
+            env["MODEL_PRETRAINED"] = m.pretrained
+            _write_conf(
+                name=name,
+                description=f"Standard run (n={STANDARD_DIFF_N}/task, difficulty={diff}) for {m.pretrained}",
+                env=env,
+            )
+            batches["standard"].append(name)
+
+    # --- Coloring re-run: special-coloring, difficulty-separated, n=500 -------
+    # The default coloring graphs (full Delaunay triangulation) have a chromatic
+    # number that concentrates on 3-4, so the answer is nearly constant and the
+    # signal is weak/guessable. SPECIAL_COLORING plants χ uniformly across
+    # {2,3,4} (linear 2→3→4 per sample). One job per (difficulty, model),
+    # coloring task only, n=500/task — mirrors the standard layout so the
+    # easy→medium→hard gradient is preserved.
+    batches["coloring"] = []
+    for diff in STANDARD_DIFFICULTIES:
+        for m in MODELS_4B:
+            name = f"graph_bench_coloring_{diff}_{m.short}"
+            env = _standard_env(STANDARD_DIFF_N, CHUNK_STANDARD)
+            env["DIFFICULTY"] = diff
+            env.pop("DIFFICULTY_OVERRIDES", None)
+            env["TASKS"] = "coloring"
+            env["SPECIAL_COLORING"] = "1"
+            env["MODEL_PRETRAINED"] = m.pretrained
+            _write_conf(
+                name=name,
+                description=(
+                    f"Coloring re-run (special-coloring χ∈{{2,3,4}} uniform, "
+                    f"n={STANDARD_DIFF_N}/task, difficulty={diff}) for {m.pretrained}"
+                ),
+                env=env,
+            )
+            batches["coloring"].append(name)
 
     # --- Label-style ablation: letters + none, 4B panel, n=500 ----------------
     batches["ablation_labels"] = []
@@ -213,19 +279,60 @@ def main() -> None:
         )
         batches["ablation_color"].append(name)
 
-    # --- Adjacency-matrix ablation: 4B panel, n=500 ---------------------------
-    batches["ablation_adjmatrix"] = []
-    for m in MODELS_4B:
-        name = f"graph_bench_ablation_adjmatrix_{m.short}"
-        env = _standard_env(ABLATION_N, CHUNK_ABLATION)
-        env["MODEL_PRETRAINED"] = m.pretrained
-        env["INCLUDE_ADJ_MATRIX"] = "1"
-        _write_conf(
-            name=name,
-            description=f"Ablation: include adjacency matrix in prompt (n={ABLATION_N}) for {m.pretrained}",
-            env=env,
-        )
-        batches["ablation_adjmatrix"].append(name)
+    # --- Adjacency-list ablation: difficulty-separated, n=100/task, 4B panel --
+    # One job per (difficulty, model): graph_bench_ablation_adjlist_<diff>_<m>.
+    # Pure per-difficulty (every task rendered at this difficulty, no override)
+    # so the runs form a clean easy→medium→hard gradient, mirroring the
+    # standard layout. INCLUDE_ADJ_MATRIX=1 now appends a text adjacency *list*
+    # to the prompt (the flag name is retained for compatibility).
+    batches["ablation_adjlist"] = []
+    for diff in STANDARD_DIFFICULTIES:
+        for m in MODELS_4B:
+            name = f"graph_bench_ablation_adjlist_{diff}_{m.short}"
+            env = _standard_env(ADJLIST_DIFF_N, CHUNK_ABLATION)
+            env["DIFFICULTY"] = diff
+            env.pop("DIFFICULTY_OVERRIDES", None)
+            env["INCLUDE_ADJ_MATRIX"] = "1"
+            env["MODEL_PRETRAINED"] = m.pretrained
+            _write_conf(
+                name=name,
+                description=(
+                    f"Ablation: include adjacency list in prompt "
+                    f"(n={ADJLIST_DIFF_N}/task, difficulty={diff}) for {m.pretrained}"
+                ),
+                env=env,
+            )
+            batches["ablation_adjlist"].append(name)
+
+    # --- Adjacency-list COLORING re-run: special-coloring + adj list ----------
+    # The adjacency-list ablation's coloring task MUST use SPECIAL_COLORING:
+    # default coloring graphs (full Delaunay) have χ concentrated on 3-4, so the
+    # answer is nearly constant and accuracy is dominated by guessing. This batch
+    # plants χ uniformly across {2,3,4} (linear 2→3→4) while also injecting the
+    # adjacency list into the prompt, so the coloring column of the adj-list
+    # ablation is meaningful. Coloring task only; the conn/shortest_path adj-list
+    # results live in the `ablation_adjlist` batch.
+    batches["ablation_adjlist_coloring"] = []
+    for diff in STANDARD_DIFFICULTIES:
+        for m in MODELS_4B:
+            name = f"graph_bench_ablation_adjlist_coloring_{diff}_{m.short}"
+            env = _standard_env(ADJLIST_DIFF_N, CHUNK_ABLATION)
+            env["DIFFICULTY"] = diff
+            env.pop("DIFFICULTY_OVERRIDES", None)
+            env["TASKS"] = "coloring"
+            env["SPECIAL_COLORING"] = "1"
+            env["INCLUDE_ADJ_MATRIX"] = "1"
+            env["MODEL_PRETRAINED"] = m.pretrained
+            _write_conf(
+                name=name,
+                description=(
+                    f"Ablation: adjacency list + special-coloring (χ∈{{2,3,4}} "
+                    f"uniform), coloring only, n={ADJLIST_DIFF_N}/task, "
+                    f"difficulty={diff}) for {m.pretrained}"
+                ),
+                env=env,
+            )
+            batches["ablation_adjlist_coloring"].append(name)
 
     # --- Thinking-mode ablation: 4B+8B Qwen3-VL Thinking variants -------------
     batches["ablation_thinking"] = []
@@ -289,6 +396,41 @@ def main() -> None:
             env=env,
         )
         batches["sweep_edges"].append(name)
+
+    # --- Coloring-only sweeps with balanced χ∈{2,3,4} (special coloring) -------
+    # The plain sweeps above run all three tasks; their coloring slice uses the
+    # default full-triangulation graphs whose chromatic number concentrates on
+    # 3-4 (weak, guessable signal). These re-run the node/edge sweeps for the
+    # coloring task ALONE with SPECIAL_COLORING, which plants χ linearly across
+    # {2,3,4} per constraint-value bucket (clamped to ≤ node_count on the node
+    # axis — a graph can't require more colors than it has nodes). One job per
+    # (axis, model). Named graph_bench_sweep_<axis>_coloring_<model> so the
+    # batch-report axis parser still classifies them as sweeps.
+    for axis, values, spv in (
+        ("nodes", SWEEP_NODE_VALUES, SWEEP_NODE_SPV),
+        ("edges", SWEEP_EDGE_VALUES, SWEEP_EDGE_SPV),
+    ):
+        batch = f"sweep_{axis}_coloring"
+        batches[batch] = []
+        for m in MODELS_4B:
+            name = f"graph_bench_sweep_{axis}_coloring_{m.short}"
+            env = _standard_env(ABLATION_N, CHUNK_SWEEP)
+            env["TASKS"] = "coloring"
+            env["SPECIAL_COLORING"] = "1"
+            env["MODEL_PRETRAINED"] = m.pretrained
+            env["CONSTRAINT"] = axis
+            env["CONSTRAINT_VALUES"] = values
+            env["SAMPLES_PER_VALUE"] = str(spv)
+            env.pop("DIFFICULTY_OVERRIDES", None)
+            _write_conf(
+                name=name,
+                description=(
+                    f"Sweep: {axis}-count axis ({values}, {spv}/value), coloring "
+                    f"only with balanced χ∈{{2,3,4}} (special-coloring) for {m.pretrained}"
+                ),
+                env=env,
+            )
+            batches[batch].append(name)
 
     # --- Emit batch manifests -------------------------------------------------
     # load_job() takes the conf path *relative to jobs/* without the .conf

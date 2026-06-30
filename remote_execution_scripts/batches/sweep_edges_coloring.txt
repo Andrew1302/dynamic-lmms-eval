@@ -1,0 +1,3 @@
+graph_benchmark/graph_bench_sweep_edges_coloring_internvl35_4b
+graph_benchmark/graph_bench_sweep_edges_coloring_qwen35_4b
+graph_benchmark/graph_bench_sweep_edges_coloring_gemma4_e2b

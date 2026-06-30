@@ -66,7 +66,17 @@ from compare_direct_disguise import (
 # generic "labels" match.
 _AXIS_PREFIXES: list[tuple[str, str, str]] = [
     # (prefix, axis, axis_value)
+    # Difficulty-separated standard runs — most specific first so the difficulty
+    # lands in axis_value and model_short stays just the model.
+    ("graph_bench_standard_easy_",           "standard",     "easy"),
+    ("graph_bench_standard_medium_",         "standard",     "medium"),
+    ("graph_bench_standard_hard_",           "standard",     "hard"),
     ("graph_bench_standard_",                "standard",     ""),
+    # Coloring re-run (special-coloring), difficulty-separated like standard.
+    ("graph_bench_coloring_easy_",           "coloring",     "easy"),
+    ("graph_bench_coloring_medium_",         "coloring",     "medium"),
+    ("graph_bench_coloring_hard_",           "coloring",     "hard"),
+    ("graph_bench_coloring_",                "coloring",     ""),
     ("graph_bench_ablation_labels_letters_", "labels",       "letters"),
     ("graph_bench_ablation_labels_none_",    "labels",       "none"),
     ("graph_bench_ablation_color_",          "color",        ""),
@@ -202,6 +212,10 @@ def collect_sweep_job(
     buckets: dict[tuple[str, str, int], list[int]] = defaultdict(list)
     total_direct = [0, 0]      # [correct, n]
     total_disguise = [0, 0]
+    # Pair direct/disguise on the same (base_task, doc_id) so we can emit a
+    # "paired" variant (both correct on the same instance) per constraint
+    # value — same definition as compare_direct_disguise.build_pair_rows.
+    pair_index: dict[tuple[str, int], dict[str, tuple[int, int]]] = defaultdict(dict)
     for row in iter_rows(paths, job_label=job_name, dataset_root=results_dir):
         key = (row.base_task, row.variant, row.constraint_value)
         buckets[key].append(row.correct)
@@ -211,6 +225,25 @@ def collect_sweep_job(
         elif row.variant == "disguise":
             total_disguise[0] += row.correct
             total_disguise[1] += 1
+        if row.variant in ("direct", "disguise"):
+            pair_index[(row.base_task, row.doc_id)][row.variant] = (
+                row.correct, row.constraint_value,
+            )
+
+    # Paired buckets: only doc_ids present in BOTH variants count. Direct and
+    # disguise share the constraint_value at the same doc_id (parallel
+    # instances), so prefer direct's value and fall back to disguise's.
+    total_paired = [0, 0]
+    for (base, _doc_id), variants in pair_index.items():
+        if "direct" not in variants or "disguise" not in variants:
+            continue
+        d_corr, d_cv = variants["direct"]
+        g_corr, g_cv = variants["disguise"]
+        cv = d_cv if d_cv >= 0 else g_cv
+        both = int(d_corr == 1 and g_corr == 1)
+        buckets[(base, "paired", cv)].append(both)
+        total_paired[0] += both
+        total_paired[1] += 1
 
     long_rows: list[dict] = []
     for (base, variant, x), corrects in sorted(buckets.items()):
@@ -227,7 +260,7 @@ def collect_sweep_job(
         "per_task": {},
         "overall_direct_acc": round(total_direct[0] / (total_direct[1] or 1), 4),
         "overall_disguise_acc": round(total_disguise[0] / (total_disguise[1] or 1), 4),
-        "overall_paired_acc": "",  # paired accuracy is meaningless for sweeps
+        "overall_paired_acc": round(total_paired[0] / (total_paired[1] or 1), 4),
         "n_samples": total_direct[1] + total_disguise[1],
     }
     return summary_partial, long_rows, picked_ts

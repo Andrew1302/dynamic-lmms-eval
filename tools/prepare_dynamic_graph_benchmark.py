@@ -113,6 +113,14 @@ def parse_args() -> argparse.Namespace:
                         help="Edge style for weighted graphs. Unweighted graphs are always straight.")
     parser.add_argument("--include-adjacency-matrix", action="store_true",
                         help="Append a text adjacency matrix to the direct-view prompt.")
+    parser.add_argument("--special-coloring", action="store_true",
+                        help="Coloring task only: instead of the default full Delaunay "
+                             "triangulation (whose chromatic number concentrates on 3-4 "
+                             "and is nearly constant), build controlled subgraphs whose "
+                             "chromatic number is planted to linearly cover {2, 3, 4} — "
+                             "each consecutive coloring sample cycles 2→3→4, so the answer "
+                             "distribution is uniform over the three values. No effect on "
+                             "other tasks or in sweep mode.")
 
     # Sweep mode
     parser.add_argument("--constraint", choices=["nodes", "edges"], default=None,
@@ -152,6 +160,11 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.constraint is not None and args.constraint_values is None:
         parser.error("--constraint requires --constraint-values")
+    # --special-coloring composes with sweep mode: it only affects the coloring
+    # task, where node_count and target_chromatic are independent knobs (see
+    # graph_sampling.coloring_graph). In sweep mode χ is planted per value
+    # bucket, clamped so node_count >= χ (a graph can't require more colors
+    # than it has nodes).
     return args
 
 
@@ -210,12 +223,13 @@ def _encode_sample_images(sample):
 
 def _render_standard_one(payload):
     """Render one (task_name, i) standard-mode sample. Picklable, side-effect free."""
-    task_name, i, seed, difficulty, cfg, include_adj = payload
+    task_name, i, seed, difficulty, cfg, include_adj, target_chromatic = payload
     mod = _ensure_benchmark_loaded()
     task = mod.get_all_tasks()[task_name]()
     sample = task.generate(
         seed=seed, difficulty=difficulty, config=cfg,
-        include_adjacency_matrix=include_adj,
+        include_adjacency_list=include_adj,
+        target_chromatic=target_chromatic,
     )
     return task_name, i, seed, _encode_sample_images(sample)
 
@@ -223,26 +237,33 @@ def _render_standard_one(payload):
 def _render_sweep_one(payload):
     """Render one sweep-mode sample. Handles both 'nodes' and 'edges' constraints."""
     (task_name, ordering_idx, base_seed, constraint, value,
-     cfg, include_adj, tol, max_attempts) = payload
+     cfg, include_adj, tol, max_attempts, target_chromatic) = payload
     mod = _ensure_benchmark_loaded()
     task = mod.get_all_tasks()[task_name]()
     if constraint == "nodes":
         sample = task.generate(
             seed=base_seed, difficulty="medium", config=cfg,
-            include_adjacency_matrix=include_adj, node_count=value,
+            include_adjacency_list=include_adj, node_count=value,
+            target_chromatic=target_chromatic,
         )
         used_seed = base_seed
     else:
         sample, used_seed = _sample_for_edge_target(
             task=task, target_edges=value, cfg=cfg, include_adj=include_adj,
             base_seed=base_seed, tol=tol, max_attempts=max_attempts,
+            target_chromatic=target_chromatic,
         )
     return task_name, ordering_idx, used_seed, value, _encode_sample_images(sample)
 
 
-def _sample_for_edge_target(task, target_edges, cfg, include_adj, base_seed, tol, max_attempts):
+def _sample_for_edge_target(task, target_edges, cfg, include_adj, base_seed,
+                            tol, max_attempts, target_chromatic=None):
     """Rejection-sample by varying node count to hit the edge target."""
     v_lo = max(3, target_edges // 3 - 2)
+    # A graph needs at least χ nodes to require χ colors, so when a chromatic
+    # number is planted never sample fewer nodes than that.
+    if target_chromatic is not None:
+        v_lo = max(v_lo, target_chromatic)
     v_hi = max(v_lo + 2, target_edges + 4)
     tol_lo, tol_hi = (1 - tol) * target_edges, (1 + tol) * target_edges
     rng = random.Random(base_seed)
@@ -253,7 +274,8 @@ def _sample_for_edge_target(task, target_edges, cfg, include_adj, base_seed, tol
         seed = base_seed + attempt * 101
         sample = task.generate(
             seed=seed, difficulty="medium", config=cfg,
-            include_adjacency_matrix=include_adj, node_count=nc,
+            include_adjacency_list=include_adj, node_count=nc,
+            target_chromatic=target_chromatic,
         )
         diff = abs(sample["n_edges"] - target_edges)
         if diff < best_diff:
@@ -288,6 +310,7 @@ def _fingerprint(args: argparse.Namespace) -> dict:
         "node_color": args.node_color,
         "edge_style": args.edge_style,
         "include_adjacency_matrix": bool(args.include_adjacency_matrix),
+        "special_coloring": bool(args.special_coloring),
         "constraint": args.constraint,
         "constraint_values": args.constraint_values,
         "samples_per_value": args.samples_per_value,
@@ -589,7 +612,11 @@ def _generate_standard(args, cfg, task_names):
     print(f"[prepare_dynamic_graph_benchmark] Generating {args.num_samples} generations per task "
           f"across {task_names} (difficulty={difficulty_for}, seed={args.seed}, "
           f"label_style={args.label_style}, edge_style={args.edge_style}, "
-          f"adj_matrix={args.include_adjacency_matrix}, num_workers={args.num_workers})")
+          f"adj_matrix={args.include_adjacency_matrix}, "
+          f"special_coloring={args.special_coloring}, num_workers={args.num_workers})")
+    if args.special_coloring and "coloring" not in task_names:
+        print("[prepare_dynamic_graph_benchmark] WARNING: --special-coloring set but "
+              "'coloring' is not among the selected tasks — flag has no effect.")
 
     payloads = []
     for task_name in task_names:
@@ -600,8 +627,15 @@ def _generate_standard(args, cfg, task_names):
         task_salt = zlib.crc32(task_name.encode("utf-8")) % 1000
         for i in range(args.num_samples):
             seed = args.seed + i * 1000 + task_salt
+            # Special coloring: plant χ linearly across {2,3,4} so the answer
+            # distribution is uniform. Sample i cycles 2→3→4→2… (i % 3).
+            # Only the coloring task supports target_chromatic; everything
+            # else gets None (default generation).
+            target_chromatic = None
+            if args.special_coloring and task_name == "coloring":
+                target_chromatic = 2 + (i % 3)
             payloads.append((task_name, i, seed, difficulty, cfg,
-                             args.include_adjacency_matrix))
+                             args.include_adjacency_matrix, target_chromatic))
 
     total = len(payloads)
     done = 0
@@ -632,12 +666,26 @@ def _generate_sweep(args, cfg, task_names):
     counter = 0
     for task_name in task_names:
         for value in values:
-            for _ in range(spv):
+            for j in range(spv):
                 base_seed = args.seed + counter * 7919
                 counter += 1
+                # Special coloring: plant χ linearly across {2,3,4} per value
+                # bucket so the answer distribution is balanced at every point
+                # on the sweep axis (default coloring's χ concentrates on 3-4).
+                # Only the coloring task supports target_chromatic. On the node
+                # axis χ is clamped to ≤ node_count — a graph can't require more
+                # colors than it has nodes — so e.g. value=3 cycles {2,3}.
+                target_chromatic = None
+                if args.special_coloring and task_name == "coloring":
+                    if args.constraint == "nodes":
+                        feasible = [k for k in (2, 3, 4) if k <= value] or [2]
+                    else:
+                        feasible = [2, 3, 4]
+                    target_chromatic = feasible[j % len(feasible)]
                 payloads.append((task_name, counter, base_seed, args.constraint, value,
                                  cfg, args.include_adjacency_matrix,
-                                 args.edge_tolerance, args.edge_max_attempts))
+                                 args.edge_tolerance, args.edge_max_attempts,
+                                 target_chromatic))
 
     per_bucket_remaining: dict[tuple[str, int], int] = {}
     for p in payloads:

@@ -1,0 +1,13 @@
+# Coloring-fix sweep re-run (2026-06-30).
+# Coloring-special (balanced chi 2/3/4) for all 3 models, both axes, plus the
+# full 3-task qwen sweep at Qwen3.5-4B to refresh its directed_connectivity /
+# shortest_path rows (the _paper sweep had those from the old Qwen3-VL-4B).
+# gemma/internvl already use their final models -> coloring-special only.
+graph_benchmark/graph_bench_sweep_nodes_coloring_internvl35_4b
+graph_benchmark/graph_bench_sweep_nodes_coloring_qwen35_4b
+graph_benchmark/graph_bench_sweep_nodes_coloring_gemma4_e2b
+graph_benchmark/graph_bench_sweep_nodes_qwen35_4b
+graph_benchmark/graph_bench_sweep_edges_coloring_internvl35_4b
+graph_benchmark/graph_bench_sweep_edges_coloring_qwen35_4b
+graph_benchmark/graph_bench_sweep_edges_coloring_gemma4_e2b
+graph_benchmark/graph_bench_sweep_edges_qwen35_4b

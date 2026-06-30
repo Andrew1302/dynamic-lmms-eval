@@ -9,6 +9,8 @@ env
 venv
 .venv
 
+
+
 results
 
 remote_results
@@ -17,6 +19,13 @@ remote_results
 build
 dist
 !lmms_eval/tui/web/dist
+
+
+dynamic_graph_benchmark_data
+dynamic_graph_benchmark_data_images
+coloring_sweep_samples
+
+._*
 
 # Package manager
 node_modules/

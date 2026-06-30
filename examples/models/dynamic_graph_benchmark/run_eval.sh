@@ -20,6 +20,9 @@
 #   NODE_COLOR             hex (default #AED6F1)
 #   EDGE_STYLE             straight|curved (default straight)
 #   INCLUDE_ADJ_MATRIX     1 to enable, 0/empty to disable
+#   SPECIAL_COLORING       1 to plant the coloring task's chromatic number
+#                          uniformly across {2,3,4} (linear 2→3→4 per sample);
+#                          0/empty keeps the default full-triangulation graphs
 #   DIFFICULTY_OVERRIDES   space-separated "task=level" pairs forwarded raw
 #
 # Optional env vars (sweep mode):
@@ -44,6 +47,7 @@ set -euo pipefail
 : "${NODE_COLOR:=#AED6F1}"
 : "${EDGE_STYLE:=straight}"
 : "${INCLUDE_ADJ_MATRIX:=0}"
+: "${SPECIAL_COLORING:=0}"
 : "${DIFFICULTY_OVERRIDES:=}"
 : "${CONSTRAINT:=}"
 : "${CONSTRAINT_VALUES:=}"
@@ -56,6 +60,20 @@ set -euo pipefail
 # $DATASET_DIR/chunks/, this script iterates the shards, and a re-invocation
 # (after a mid-run failure) skips every chunk already marked done.
 : "${CHUNK_SIZE:=0}"
+
+# Build the explicit lmms-eval subtask list from $TASKS. Running the full
+# `dynamic_graph_benchmark` group always loads all 6 subtasks (coloring,
+# directed_connectivity, shortest_path × direct/disguise); a single-task
+# dataset (e.g. the coloring-only re-run) has 0 rows for the others, so
+# lmms-eval crashes at load time (`test_doc = self.task_docs[0]` →
+# IndexError on an empty filtered split). Requesting only the direct+disguise
+# subtasks for the tasks actually present avoids that and is equivalent to the
+# group when all three tasks are selected.
+_lmms_tasks=()
+for _t in $TASKS; do
+    _lmms_tasks+=("dynamic_graph_benchmark_${_t}_direct" "dynamic_graph_benchmark_${_t}_disguise")
+done
+LMMS_TASKS="$(IFS=,; echo "${_lmms_tasks[*]}")"
 
 # Map HF pretrained id to lmms-eval --model registry name.
 case "$MODEL_PRETRAINED" in
@@ -99,6 +117,20 @@ case "$MODEL_PRETRAINED" in
         ;;
 esac
 
+# Terse-output appendix for Qwen3.5. Even with thinking disabled it ignores the
+# task's "single integer / Yes-No" instruction and writes a full worked solution
+# — slow (needs a big token budget) and frequently truncated. Appending a
+# forceful "output only the final answer" directive to the user turn (via the
+# vllm wrapper's reasoning_prompt) makes it emit just the answer: terse → fast at
+# the default 64-tok budget, and slightly more accurate. Verified on medium:
+# 24/24 terse, accuracy 10→12/24, yes/no connectivity preserved. Task-agnostic
+# wording (the per-task pre_prompt already states integer-vs-yesno); comma-free
+# so it survives model_args parsing. Other models already obey, so Qwen-only.
+case "$MODEL_PRETRAINED" in
+    *Qwen3.5*) VLLM_REASONING=",reasoning_prompt=\\nReply with ONLY the final answer. No explanation. No steps. No reasoning. Output just the answer and nothing else." ;;
+    *)         VLLM_REASONING="" ;;
+esac
+
 # Per-model memory tuning. Most fit comfortably; Gemma-4-E2B is mis-marketed —
 # "Effective 2 B" but its total weight on disk is ~9.6 GB, leaving < 1 GiB for
 # KV cache on the 12 GiB RTX 4070. Tighten max_model_len there so the KV cache
@@ -117,7 +149,7 @@ case "$MODEL_PRETRAINED" in
         ;;
 esac
 
-VLLM_DEFAULT_ARGS="model=$MODEL_PRETRAINED,gpu_memory_utilization=$VLLM_GPU_UTIL,max_model_len=$VLLM_MAX_MODEL_LEN,max_num_seqs=$VLLM_MAX_NUM_SEQS,enforce_eager=True,dtype=bfloat16,trust_remote_code=True,limit_mm_per_prompt={\"image\":1}${VLLM_NO_THINK}"
+VLLM_DEFAULT_ARGS="model=$MODEL_PRETRAINED,gpu_memory_utilization=$VLLM_GPU_UTIL,max_model_len=$VLLM_MAX_MODEL_LEN,max_num_seqs=$VLLM_MAX_NUM_SEQS,enforce_eager=True,dtype=bfloat16,trust_remote_code=True,limit_mm_per_prompt={\"image\":1}${VLLM_NO_THINK}${VLLM_REASONING}"
 case "$MODEL_NAME" in
     vllm|vllm_chat)
         : "${MODEL_ARGS:=$VLLM_DEFAULT_ARGS}" ;;
@@ -128,6 +160,13 @@ case "$MODEL_NAME" in
         # InternVL3 dynamic-preprocess tiles each image up to max_num times
         # (default 12 → ~3k vision tokens). On VM03's 12 GiB GPU the 4B/8B
         # variants OOM during attention softmax mid-run; cap at 6 tiles.
+        #
+        # Even at 6 tiles, medium/hard graphs run ~45 MiB over the edge while
+        # ~1 GiB sits "reserved but unallocated" (allocator fragmentation).
+        # expandable_segments reclaims that fragmented reserve — it's a pure
+        # CUDA-allocator strategy, so model inputs/tiling/outputs are unchanged
+        # and accuracy stays comparable to easy and to the other models.
+        export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
         : "${MODEL_ARGS:=pretrained=$MODEL_PRETRAINED,max_num=6}" ;;
     *)
         # Non-reasoning wrappers (minicpm_v, llama_vision):
@@ -136,9 +175,33 @@ case "$MODEL_NAME" in
         : "${MODEL_ARGS:=pretrained=$MODEL_PRETRAINED}" ;;
 esac
 
-echo "[run_eval] job=$JOB_NAME model=$MODEL_NAME pretrained=$MODEL_PRETRAINED"
+# Batch size. batch_size=1 serializes vllm (one sequence at a time) and is the
+# throughput bottleneck for verbose models — Qwen3.5 emits ~200 tok/answer at
+# ~42 tok/s, ~4 h per standard job. vllm batches many prompts concurrently, so
+# raising it for the vllm path gives a ~5-10x speedup. Greedy decoding
+# (temperature=0) is per-sequence identical regardless of batch, so results are
+# unchanged. Gemma is capped at its tight max_num_seqs (KV-starved on the 12 GiB
+# card); HF wrappers (internvl3_5 etc.) stay at 1 (already fast, untested batched).
+# Override with BATCH_SIZE in the conf/env.
+case "$MODEL_NAME" in
+    vllm|vllm_chat)
+        case "$MODEL_PRETRAINED" in
+            *gemma-4-E2B*|*gemma-4-e2b*) : "${BATCH_SIZE:=4}" ;;
+            # Hand vllm a whole chunk at once. The wrapper blocks on the entire
+            # batch, so a small batch is gated by its single longest (1024-tok)
+            # generation; a large batch lets vllm's continuous batching keep the
+            # KV-limited running set full and amortizes that tail across the
+            # chunk. max_num_seqs (256) caps actual concurrency; the rest queue.
+            *)                           : "${BATCH_SIZE:=256}" ;;
+        esac
+        ;;
+    *) : "${BATCH_SIZE:=1}" ;;
+esac
+
+echo "[run_eval] job=$JOB_NAME model=$MODEL_NAME pretrained=$MODEL_PRETRAINED batch_size=$BATCH_SIZE"
 echo "[run_eval]   tasks=$TASKS dataset_dir=$DATASET_DIR"
-echo "[run_eval]   label_style=$LABEL_STYLE node_color=$NODE_COLOR edge_style=$EDGE_STYLE adj_matrix=$INCLUDE_ADJ_MATRIX"
+echo "[run_eval]   lmms_tasks=$LMMS_TASKS"
+echo "[run_eval]   label_style=$LABEL_STYLE node_color=$NODE_COLOR edge_style=$EDGE_STYLE adj_matrix=$INCLUDE_ADJ_MATRIX special_coloring=$SPECIAL_COLORING"
 if [ -n "$CONSTRAINT" ]; then
     echo "[run_eval]   sweep: constraint=$CONSTRAINT values=$CONSTRAINT_VALUES spv=$SAMPLES_PER_VALUE"
 else
@@ -161,6 +224,9 @@ _build_prepare_args() {
     )
     if [ "$INCLUDE_ADJ_MATRIX" = "1" ]; then
         args+=(--include-adjacency-matrix)
+    fi
+    if [ "$SPECIAL_COLORING" = "1" ]; then
+        args+=(--special-coloring)
     fi
     local ov
     for ov in $DIFFICULTY_OVERRIDES; do
@@ -196,8 +262,8 @@ _run_lmms_eval() {
     accelerate launch --num_processes=1 --main_process_port=12346 -m lmms_eval \
         --model "$MODEL_NAME" \
         --model_args "$MODEL_ARGS" \
-        --tasks dynamic_graph_benchmark \
-        --batch_size 1 \
+        --tasks "$LMMS_TASKS" \
+        --batch_size "$BATCH_SIZE" \
         --log_samples \
         --output_path "$output_path" \
         "${EXTRA_LMMS_ARGS[@]}"
@@ -221,8 +287,11 @@ python tools/prepare_dynamic_graph_benchmark.py "${PREPARE_ARGS[@]}"
 
 # --- Step 2: run lmms-eval -----------------------------------------------------
 
-# Thinking-mode ablations need a much larger max_new_tokens than the task yaml's
-# default (sized for short non-thinking answers). Override via --gen_kwargs.
+# Thinking-mode SKUs reason inside <think>...</think> and need a much larger
+# max_new_tokens than the task yaml's default (64). Override via --gen_kwargs.
+# (Qwen3.5 used to need this too because it wrote verbose worked-solutions, but
+# the terse reasoning_prompt appendix above now makes it answer in a few tokens,
+# so the default 64-tok budget is correct — and fast.)
 EXTRA_LMMS_ARGS=()
 case "$MODEL_PRETRAINED" in
     *Thinking*) EXTRA_LMMS_ARGS+=(--gen_kwargs "max_new_tokens=4096") ;;
