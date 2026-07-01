@@ -1,8 +1,0 @@
-# Remaining 6 of the coloring-fix sweep re-run (2026-06-30), after the first
-# 2 (nodes coloring internvl + qwen) completed and a manual stop.
-graph_benchmark/graph_bench_sweep_nodes_coloring_gemma4_e2b
-graph_benchmark/graph_bench_sweep_nodes_qwen35_4b
-graph_benchmark/graph_bench_sweep_edges_coloring_internvl35_4b
-graph_benchmark/graph_bench_sweep_edges_coloring_qwen35_4b
-graph_benchmark/graph_bench_sweep_edges_coloring_gemma4_e2b
-graph_benchmark/graph_bench_sweep_edges_qwen35_4b

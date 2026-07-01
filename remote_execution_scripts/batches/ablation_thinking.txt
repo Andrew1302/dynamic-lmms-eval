@@ -1,2 +1,0 @@
-graph_benchmark/graph_bench_ablation_thinking_qwen3vl_4b_thinking
-graph_benchmark/graph_bench_ablation_thinking_qwen3vl_8b_thinking

@@ -41,25 +41,12 @@ MODELS_4B = [
     Model("gemma4_e2b", "google/gemma-4-E2B-it"),
 ]
 
-# Larger panel: only used for the model-size ablation (n=500).
-MODELS_8B = [
-    Model("qwen3vl_8b", "Qwen/Qwen3-VL-8B-Instruct"),
-    Model("internvl35_8b", "OpenGVLab/InternVL3_5-8B"),
-    Model("llava_ov15_8b", "lmms-lab/LLaVA-OneVision-1.5-8B"),
-    Model("minicpmv_2_6", "openbmb/MiniCPM-V-2_6"),
-    Model("llama32_v_11b", "meta-llama/Llama-3.2-11B-Vision-Instruct"),
-    Model("qwen35_9b", "Qwen/Qwen3.5-9B"),
-]
-
-# Thinking-mode SKUs (paired against their -Instruct counterparts).
-MODELS_THINKING = [
-    Model("qwen3vl_4b_thinking", "Qwen/Qwen3-VL-4B-Thinking"),
-    Model("qwen3vl_8b_thinking", "Qwen/Qwen3-VL-8B-Thinking"),
-]
-
 
 STANDARD_N = 5000
 ABLATION_N = 500
+# Difficulty-separated label/color ablation: n per task per difficulty. The
+# ablation only needs to detect a shift, so 100/task/difficulty is enough.
+ABLATION_DIFF_N = 100
 TASKS = "coloring directed_connectivity shortest_path"
 DIFFICULTY = "medium"
 DIFFICULTY_OVERRIDES = "shortest_path=easy"
@@ -249,35 +236,99 @@ def main() -> None:
             )
             batches["coloring"].append(name)
 
-    # --- Label-style ablation: letters + none, 4B panel, n=500 ----------------
+    # --- Label-style ablation: letters + none, difficulty-separated, n=100 ----
+    # One job per (style, difficulty, model). Because --special-coloring yields a
+    # coloring-ONLY dataset, coloring is split into its own SPECIAL_COLORING job
+    # (χ∈{2,3,4} linear 2→3→4) while directed_connectivity + shortest_path share
+    # a job. Together the two jobs cover all three tasks per (style, diff, model)
+    # at n=ABLATION_DIFF_N/task. Mirrors the standard/coloring difficulty layout
+    # so the report keeps a clean easy→medium→hard gradient per model.
     batches["ablation_labels"] = []
+    batches["ablation_labels_letters"] = []
+    batches["ablation_labels_none"] = []
     for style in ("letters", "none"):
-        for m in MODELS_4B:
-            name = f"graph_bench_ablation_labels_{style}_{m.short}"
-            env = _standard_env(ABLATION_N, CHUNK_ABLATION)
-            env["MODEL_PRETRAINED"] = m.pretrained
-            env["LABEL_STYLE"] = style
-            _write_conf(
-                name=name,
-                description=f"Ablation: label_style={style} (n={ABLATION_N}) for {m.pretrained}",
-                env=env,
-            )
-            batches["ablation_labels"].append(name)
+        for diff in STANDARD_DIFFICULTIES:
+            for m in MODELS_4B:
+                # directed_connectivity + shortest_path (default coloring absent)
+                name = f"graph_bench_ablation_labels_{style}_{diff}_{m.short}"
+                env = _standard_env(ABLATION_DIFF_N, CHUNK_ABLATION)
+                env["DIFFICULTY"] = diff
+                env.pop("DIFFICULTY_OVERRIDES", None)
+                env["TASKS"] = "directed_connectivity shortest_path"
+                env["LABEL_STYLE"] = style
+                env["MODEL_PRETRAINED"] = m.pretrained
+                _write_conf(
+                    name=name,
+                    description=(
+                        f"Ablation: label_style={style}, conn+shortest_path "
+                        f"(n={ABLATION_DIFF_N}/task, difficulty={diff}) for {m.pretrained}"
+                    ),
+                    env=env,
+                )
+                batches["ablation_labels"].append(name)
+                batches[f"ablation_labels_{style}"].append(name)
+                # coloring only, balanced χ∈{2,3,4} (special coloring)
+                cname = f"graph_bench_ablation_labels_{style}_coloring_{diff}_{m.short}"
+                cenv = _standard_env(ABLATION_DIFF_N, CHUNK_ABLATION)
+                cenv["DIFFICULTY"] = diff
+                cenv.pop("DIFFICULTY_OVERRIDES", None)
+                cenv["TASKS"] = "coloring"
+                cenv["SPECIAL_COLORING"] = "1"
+                cenv["LABEL_STYLE"] = style
+                cenv["MODEL_PRETRAINED"] = m.pretrained
+                _write_conf(
+                    name=cname,
+                    description=(
+                        f"Ablation: label_style={style}, coloring only with "
+                        f"balanced χ∈{{2,3,4}} (special-coloring), "
+                        f"n={ABLATION_DIFF_N}/task, difficulty={diff}) for {m.pretrained}"
+                    ),
+                    env=cenv,
+                )
+                batches["ablation_labels"].append(cname)
+                batches[f"ablation_labels_{style}"].append(cname)
 
-    # --- Node-color ablation: alt color, 4B panel, n=500 ----------------------
+    # --- Node-color ablation: alt color, difficulty-separated, n=100 ----------
+    # Same split as the label ablation: conn+shortest_path in one job, coloring
+    # (special, χ∈{2,3,4} linear) in another, per (difficulty, model).
     batches["ablation_color"] = []
     alt_color = "#F1948A"
-    for m in MODELS_4B:
-        name = f"graph_bench_ablation_color_{m.short}"
-        env = _standard_env(ABLATION_N, CHUNK_ABLATION)
-        env["MODEL_PRETRAINED"] = m.pretrained
-        env["NODE_COLOR"] = alt_color
-        _write_conf(
-            name=name,
-            description=f"Ablation: node_color={alt_color} (n={ABLATION_N}) for {m.pretrained}",
-            env=env,
-        )
-        batches["ablation_color"].append(name)
+    for diff in STANDARD_DIFFICULTIES:
+        for m in MODELS_4B:
+            name = f"graph_bench_ablation_color_{diff}_{m.short}"
+            env = _standard_env(ABLATION_DIFF_N, CHUNK_ABLATION)
+            env["DIFFICULTY"] = diff
+            env.pop("DIFFICULTY_OVERRIDES", None)
+            env["TASKS"] = "directed_connectivity shortest_path"
+            env["NODE_COLOR"] = alt_color
+            env["MODEL_PRETRAINED"] = m.pretrained
+            _write_conf(
+                name=name,
+                description=(
+                    f"Ablation: node_color={alt_color}, conn+shortest_path "
+                    f"(n={ABLATION_DIFF_N}/task, difficulty={diff}) for {m.pretrained}"
+                ),
+                env=env,
+            )
+            batches["ablation_color"].append(name)
+            cname = f"graph_bench_ablation_color_coloring_{diff}_{m.short}"
+            cenv = _standard_env(ABLATION_DIFF_N, CHUNK_ABLATION)
+            cenv["DIFFICULTY"] = diff
+            cenv.pop("DIFFICULTY_OVERRIDES", None)
+            cenv["TASKS"] = "coloring"
+            cenv["SPECIAL_COLORING"] = "1"
+            cenv["NODE_COLOR"] = alt_color
+            cenv["MODEL_PRETRAINED"] = m.pretrained
+            _write_conf(
+                name=cname,
+                description=(
+                    f"Ablation: node_color={alt_color}, coloring only with "
+                    f"balanced χ∈{{2,3,4}} (special-coloring), "
+                    f"n={ABLATION_DIFF_N}/task, difficulty={diff}) for {m.pretrained}"
+                ),
+                env=cenv,
+            )
+            batches["ablation_color"].append(cname)
 
     # --- Adjacency-list ablation: difficulty-separated, n=100/task, 4B panel --
     # One job per (difficulty, model): graph_bench_ablation_adjlist_<diff>_<m>.
@@ -333,32 +384,6 @@ def main() -> None:
                 env=env,
             )
             batches["ablation_adjlist_coloring"].append(name)
-
-    # --- Thinking-mode ablation: 4B+8B Qwen3-VL Thinking variants -------------
-    batches["ablation_thinking"] = []
-    for m in MODELS_THINKING:
-        name = f"graph_bench_ablation_thinking_{m.short}"
-        env = _standard_env(ABLATION_N, CHUNK_ABLATION)
-        env["MODEL_PRETRAINED"] = m.pretrained
-        _write_conf(
-            name=name,
-            description=f"Ablation: thinking-mode SKU (n={ABLATION_N}) for {m.pretrained}",
-            env=env,
-        )
-        batches["ablation_thinking"].append(name)
-
-    # --- Model-size ablation: 8B panel, n=500 ---------------------------------
-    batches["ablation_model_size"] = []
-    for m in MODELS_8B:
-        name = f"graph_bench_ablation_size_{m.short}"
-        env = _standard_env(ABLATION_N, CHUNK_ABLATION)
-        env["MODEL_PRETRAINED"] = m.pretrained
-        _write_conf(
-            name=name,
-            description=f"Ablation: model size, n={ABLATION_N} for {m.pretrained}",
-            env=env,
-        )
-        batches["ablation_model_size"].append(name)
 
     # --- Sweep over nodes: 4B panel, 250 samples per value --------------------
     batches["sweep_nodes"] = []
@@ -431,6 +456,14 @@ def main() -> None:
                 env=env,
             )
             batches[batch].append(name)
+
+    # --- Combined difficulty-separated ablation batch -------------------------
+    # labels(letters+none) + node-color, difficulty-separated, n=100/task, all
+    # three tasks (coloring via special χ∈{2,3,4}). This is the single manifest
+    # to hand to run_batch.sh for the full campaign.
+    batches["ablation_labels_color_100"] = (
+        list(batches["ablation_labels"]) + list(batches["ablation_color"])
+    )
 
     # --- Emit batch manifests -------------------------------------------------
     # load_job() takes the conf path *relative to jobs/* without the .conf
