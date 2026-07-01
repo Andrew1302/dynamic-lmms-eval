@@ -17,7 +17,8 @@ set -euo pipefail
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/lib/common.sh"
-bootstrap
+bootstrap "$@"
+set -- ${REMAINING_ARGS[@]+"${REMAINING_ARGS[@]}"}
 
 load_job "${1:-}"
 shift || true

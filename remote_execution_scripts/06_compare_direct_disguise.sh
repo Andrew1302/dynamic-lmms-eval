@@ -18,8 +18,11 @@ set -euo pipefail
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/lib/common.sh"
-# Local-only: this script never SSHes, so skip the SSH_KEY check.
-BOOTSTRAP_LOCAL=1 bootstrap
+# Local-only: this script never SSHes, so skip the SSH_KEY check. --vm is
+# accepted (and stripped) for command-line symmetry even though it's a no-op
+# here — local result paths are VM-independent.
+BOOTSTRAP_LOCAL=1 bootstrap "$@"
+set -- ${REMAINING_ARGS[@]+"${REMAINING_ARGS[@]}"}
 
 load_job "${1:-}"
 shift || true

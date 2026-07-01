@@ -103,8 +103,10 @@ ssh_tty() {
 
 rsync_up() {
     # rsync local -> remote. Args: <local_path> <remote_relative_path> [remote_base=$REMOTE_WORKDIR]
+    # --mkpath creates missing parent components of the destination (e.g. the
+    # nested examples/models/ dirs on a fresh VM that has only the repo root).
     local src="$1" dst="$2" base="${3:-$REMOTE_WORKDIR}"
-    rsync -az --delete \
+    rsync -az --delete --mkpath \
         -e "ssh ${_ssh_opts[*]}" \
         "$src" "${VM_USER}@${VM_HOST}:${base}/${dst}"
 }
@@ -134,10 +136,42 @@ local_results_dir() { echo "${LOCAL_RESULTS_DIR}/${1}"; }
 # Every top-level script sources this, then sources config.sh.
 # $REPO_ROOT is set before sourcing so load_job can find jobs/.
 # Set BOOTSTRAP_LOCAL=1 before calling for local-only scripts (no SSH).
+#
+# Call as `bootstrap "$@"`: it strips a leading/anywhere `--vm <name>` (or
+# `--vm=<name>`) that selects the VM profile, and leaves the remaining args in
+# the global array REMAINING_ARGS for the caller to consume, e.g.
+#     bootstrap "$@"
+#     set -- "${REMAINING_ARGS[@]}"
+#     load_job "${1:-}"
+# The profile can also be chosen with the VM_PROFILE env var (the flag wins).
 bootstrap() {
     REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[1]}")/.." && pwd)"
+
+    # Pull --vm out of the arg list; keep everything else in REMAINING_ARGS.
+    REMAINING_ARGS=()
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --vm)   VM_PROFILE="${2:-}"; shift 2 || fail "--vm needs a value (e.g. --vm vm02)";;
+            --vm=*) VM_PROFILE="${1#*=}"; shift;;
+            *)      REMAINING_ARGS+=("$1"); shift;;
+        esac
+    done
+
+    # Resolve the profile (flag > VM_PROFILE env > default vm03) and source it
+    # BEFORE .env/config.sh so its identity becomes the base the rest derive from.
+    VM_PROFILE="${VM_PROFILE:-vm03}"
+    local profile_file="$REPO_ROOT/remote_execution_scripts/profiles/${VM_PROFILE}.sh"
+    if [ ! -f "$profile_file" ]; then
+        local avail
+        avail="$(ls "$REPO_ROOT/remote_execution_scripts/profiles/" 2>/dev/null | sed 's/\.sh$//' | paste -sd' ' -)"
+        fail "unknown VM profile '${VM_PROFILE}'. Available: ${avail:-<none>} (select with --vm <name>)."
+    fi
+    # shellcheck disable=SC1090
+    source "$profile_file"
+
     # Load remote_execution_scripts/.env if present. Anything already in the
-    # shell environment wins (so a one-off `SSH_KEY=... ./02_run.sh ...` still
+    # shell environment (or set by the profile above) wins — .env only fills
+    # what is still unset (so a one-off `SSH_KEY=... ./02_run.sh ...` still
     # overrides). .env is gitignored — see .env.example for the template.
     local env_file="$REPO_ROOT/remote_execution_scripts/.env"
     if [ -f "$env_file" ]; then

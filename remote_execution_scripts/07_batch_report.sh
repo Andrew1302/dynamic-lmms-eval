@@ -34,7 +34,10 @@ set -euo pipefail
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/lib/common.sh"
-BOOTSTRAP_LOCAL=1 bootstrap
+# Local-only report. --vm is accepted (and stripped) for symmetry with the
+# rest of the pipeline; local result paths are VM-independent so it's a no-op.
+BOOTSTRAP_LOCAL=1 bootstrap "$@"
+set -- ${REMAINING_ARGS[@]+"${REMAINING_ARGS[@]}"}
 
 JOBS=()
 BATCH_NAME=""

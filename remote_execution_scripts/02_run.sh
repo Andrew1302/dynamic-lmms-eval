@@ -18,7 +18,8 @@ set -euo pipefail
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/lib/common.sh"
-bootstrap
+bootstrap "$@"
+set -- ${REMAINING_ARGS[@]+"${REMAINING_ARGS[@]}"}
 
 load_job "${1:-}"
 
@@ -29,7 +30,7 @@ LAUNCHER_PATH="${RUN_DIR}/launch.sh"
 
 # Sanity check: confirm we're actually talking to the VM. If SSH is broken
 # this prints UNREACHABLE up front, instead of failing silently mid-run.
-log "ssh target: ${VM_USER}@${VM_HOST}:${VM_PORT} → $(ssh_cmd hostname 2>/dev/null || echo UNREACHABLE)"
+log "ssh target: [${VM_PROFILE}] ${VM_USER}@${VM_HOST}:${VM_PORT} → $(ssh_cmd hostname 2>/dev/null || echo UNREACHABLE)"
 
 if ssh_cmd "tmux has-session -t '$SESSION' 2>/dev/null"; then
     fail "tmux session '$SESSION' is already running. Use ./05_stop.sh $JOB_NAME first, or ./03_logs.sh $JOB_NAME to watch it."

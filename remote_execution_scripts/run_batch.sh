@@ -10,6 +10,8 @@
 #                 Multiple direct ids may be passed; combine freely with -f.
 #
 # Options:
+#   --vm NAME     Target VM profile (default vm03). Forwarded to every sub-step
+#                 via the VM_PROFILE env var. See profiles/<name>.sh.
 #   --keep-going  Continue to the next job after a failure (default: stop).
 #   --poll N      03_logs.sh --until-done poll interval, seconds (default 30).
 #   --no-report   Skip the trailing 07_batch_report.sh invocation.
@@ -33,6 +35,14 @@ RUN_REPORT=1
 
 while [ $# -gt 0 ]; do
     case "$1" in
+        --vm)
+            # Select the target VM and export it so every child script
+            # (01/02/03/04, 07) inherits it via bootstrap's VM_PROFILE lookup.
+            VM_PROFILE="${2:-}"; export VM_PROFILE
+            [ -n "$VM_PROFILE" ] || { echo "--vm needs a value (e.g. --vm vm02)" >&2; exit 2; }
+            shift 2
+            ;;
+        --vm=*) VM_PROFILE="${1#*=}"; export VM_PROFILE; shift ;;
         -f|--file)
             [ -f "$2" ] || { echo "manifest not found: $2" >&2; exit 2; }
             # Remember the manifest path so 07 can use it for batch-name +
@@ -60,6 +70,7 @@ if [ ${#JOBS[@]} -eq 0 ]; then
     exit 2
 fi
 
+echo "[run_batch] target VM: ${VM_PROFILE:-vm03}"
 echo "[run_batch] queue (${#JOBS[@]} jobs):"
 for j in "${JOBS[@]}"; do echo "  - $j"; done
 
