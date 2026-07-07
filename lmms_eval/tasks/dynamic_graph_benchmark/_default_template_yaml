@@ -20,11 +20,17 @@ generation_kwargs:
   num_beams: 1
   do_sample: false
 
-# Strip <think>...</think> blocks before scoring. strip_reasoning_tags also
-# handles the close-only case where Qwen3's chat template auto-injects the
-# opening <think> into the prompt (so the model output starts mid-reasoning
-# and only emits </think>...answer).
-reasoning_tags: [["<think>", "</think>"]]
+# Strip reasoning blocks before scoring. strip_reasoning_tags also handles the
+# close-only case where Qwen3's chat template auto-injects the opening <think>
+# into the prompt (so the model output starts mid-reasoning and only emits
+# </think>...answer).
+#   - ["<think>", "</think>"]        Qwen3.5 and InternVL3.5 (R1 prompt).
+#   - ["<|channel>", "<channel|>"]   Gemma-4-E2B thinking: its reasoning is
+#       wrapped in the special tokens <|channel>thought ... <channel|> then the
+#       answer. run_eval.sh runs Gemma's thinking arm with
+#       skip_special_tokens=False so these delimiters survive into the response;
+#       confirmed verbatim from a Gemma probe (probe_gemma.py).
+reasoning_tags: [["<think>", "</think>"], ["<|channel>", "<channel|>"]]
 
 process_results: !function utils.dynamic_graph_benchmark_process_results
 metric_list:

@@ -23,6 +23,10 @@
 #   SPECIAL_COLORING       1 to plant the coloring task's chromatic number
 #                          uniformly across {2,3,4} (linear 2→3→4 per sample);
 #                          0/empty keeps the default full-triangulation graphs
+#   THINKING               1 enables the model's reasoning mode (per-request,
+#                          single checkpoint); 0/empty disables it. Also bumps
+#                          max_new_tokens to 4096 so the <think> block can close
+#                          before the answer. See the thinking-control block.
 #   DIFFICULTY_OVERRIDES   space-separated "task=level" pairs forwarded raw
 #
 # Optional env vars (sweep mode):
@@ -49,6 +53,7 @@ set -euo pipefail
 : "${INCLUDE_ADJ_MATRIX:=0}"
 : "${SPECIAL_COLORING:=0}"
 : "${DIFFICULTY_OVERRIDES:=}"
+: "${THINKING:=0}"
 : "${CONSTRAINT:=}"
 : "${CONSTRAINT_VALUES:=}"
 : "${SAMPLES_PER_VALUE:=}"
@@ -97,50 +102,94 @@ MODEL_NAME="${MODEL_NAME_OVERRIDE:-$MODEL_NAME}"
 # fit on VM03's 12 GiB RTX 4070 (max_model_len cap, eager mode, bf16).
 # A conf can set MODEL_ARGS to override the default verbatim.
 #
-# Thinking control:
-#   - vllm wrapper: chat_template_kwargs={"enable_thinking":false} — official
-#     Qwen3/vllm mechanism, pre-injects empty <think></think> at template time.
-#   - HF wrappers (qwen3_vl etc.): reasoning_prompt="/no_think" — appends the
-#     directive to user content (chat template applied inside the wrapper).
-# Thinking-mode ablation uses *-Thinking model SKUs; we detect that suffix and
-# omit thinking-disable args so the model reasons freely. The task yaml's
-# reasoning_tags + strip_reasoning_tags filter the <think>...</think> block
-# (including the close-only shape Qwen3 chat templates produce) before scoring.
+# Thinking control. THINKING=1 turns on the model's reasoning mode; 0 disables
+# it. All three panel models toggle thinking on a *single* checkpoint, but the
+# mechanism differs per wrapper:
+#   - vllm (Qwen3.5, Gemma-4): chat_template_kwargs={"enable_thinking":true|false}
+#     — the official flag the chat template reads. Qwen3.5 defaults thinking ON,
+#     Gemma-4 defaults OFF, so we always pass it explicitly.
+#   - internvl3_5 (HF): a `think=1` model_arg makes the wrapper set the R1
+#     system prompt (InternVL3.5's documented thinking trigger).
+#   - other HF wrappers (qwen3_vl etc.): reasoning_prompt="/no_think" disables
+#     thinking; empty leaves the model reasoning.
+# A *-Thinking model SKU (e.g. Qwen3-VL-4B-Thinking) always reasons regardless
+# of THINKING. The task yaml's reasoning_tags + strip_reasoning_tags filter the
+# <think>...</think> block (including the close-only shape the chat templates
+# produce) before scoring.
 case "$MODEL_PRETRAINED" in
-    *Thinking*)
-        VLLM_NO_THINK=""
-        HF_NO_THINK=""
-        ;;
-    *)
-        VLLM_NO_THINK=',chat_template_kwargs={"enable_thinking":false}'
-        HF_NO_THINK=",reasoning_prompt=\\n/no_think"
-        ;;
+    *Thinking*) THINKING=1 ;;
 esac
 
-# Terse-output appendix for Qwen3.5. Even with thinking disabled it ignores the
-# task's "single integer / Yes-No" instruction and writes a full worked solution
-# — slow (needs a big token budget) and frequently truncated. Appending a
-# forceful "output only the final answer" directive to the user turn (via the
-# vllm wrapper's reasoning_prompt) makes it emit just the answer: terse → fast at
-# the default 64-tok budget, and slightly more accurate. Verified on medium:
-# 24/24 terse, accuracy 10→12/24, yes/no connectivity preserved. Task-agnostic
-# wording (the per-task pre_prompt already states integer-vs-yesno); comma-free
-# so it survives model_args parsing. Other models already obey, so Qwen-only.
-case "$MODEL_PRETRAINED" in
-    *Qwen3.5*) VLLM_REASONING=",reasoning_prompt=\\nReply with ONLY the final answer. No explanation. No steps. No reasoning. Output just the answer and nothing else." ;;
-    *)         VLLM_REASONING="" ;;
-esac
+if [ "$THINKING" = "1" ]; then
+    VLLM_THINK=',chat_template_kwargs={"enable_thinking":true}'
+    HF_NO_THINK=""
+    INTERNVL_THINK=",think=1"
+else
+    VLLM_THINK=',chat_template_kwargs={"enable_thinking":false}'
+    HF_NO_THINK=",reasoning_prompt=\\n/no_think"
+    INTERNVL_THINK=""
+fi
 
 # Per-model memory tuning. Most fit comfortably; Gemma-4-E2B is mis-marketed —
 # "Effective 2 B" but its total weight on disk is ~9.6 GB, leaving < 1 GiB for
 # KV cache on the 12 GiB RTX 4070. Tighten max_model_len there so the KV cache
 # has any room at all, and shrink max_num_seqs (vllm warms up with 256 dummy
 # concurrent requests by default — wasted memory since we run batch_size=1).
+VLLM_QUANT=""   # per-model quantization arg (set for InternVL below); "" = bf16
 case "$MODEL_PRETRAINED" in
     *gemma-4-E2B*|*gemma-4-e2b*)
         VLLM_GPU_UTIL=0.97
         VLLM_MAX_MODEL_LEN=4096
         VLLM_MAX_NUM_SEQS=4
+        # Thinking needs room for the reasoning chain plus the answer; the 4096
+        # window (sized for terse no-think answers) truncates it. Widen it in
+        # the thinking arm — this is a pure sequence-length knob (inputs/tiling
+        # unchanged), so it preserves comparability. max_num_seqs stays tiny so
+        # the KV cache has room on the 12 GiB card; watch for OOM on the smoke.
+        if [ "$THINKING" = "1" ]; then
+            # Gemma uses sliding-window attention, so a long single request only
+            # needs window-sized KV — measured on the 12 GiB card, even a 40k
+            # window loads (KV=14.5k tokens, 1.25x concurrency). Use a 16384
+            # window (same as InternVL) so the generation budget (12288, below,
+            # matching InternVL) has ~4k of prompt headroom.
+            VLLM_MAX_MODEL_LEN=16384
+        fi
+        ;;
+    *InternVL3*|*internvl3*)
+        # InternVL3.5-4B via vllm, fp8-quantized. In bf16 the 8.88 GiB weights
+        # left only a ~9k-token window on the 12 GiB card, which truncated the
+        # (faithful, verbose) R1 reasoning ~40% of the time on hard graphs — a
+        # physical VRAM limit, not a tuning issue (cpu_offload restored the window
+        # but at 1.4 tok/s, ~36x slower — unusable). fp8 halves the weights to
+        # ~4.4 GiB, so a 16k window fits (measured KV ~27k tokens) AND runs faster
+        # (81 vs 50 tok/s). The vision tower stays bf16; only the LM is fp8.
+        VLLM_GPU_UTIL=0.92
+        VLLM_MAX_MODEL_LEN=16384
+        VLLM_MAX_NUM_SEQS=2
+        VLLM_QUANT=",quantization=fp8"
+        export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+        ;;
+    *Qwen3.5*)
+        # Qwen3.5-4B (dense) is severely KV-starved on the 12 GiB card: measured
+        # at a 12288 window, only ~0.44 GiB / ~3.2k tokens of KV remain — so a
+        # bf16 16384 window + 12288 think budget does NOT fit (no sliding-window
+        # trick like Gemma). fp8 halves the weights (exactly as for InternVL) to
+        # make the InternVL-matched 16384-window / 12288-budget config fit. Both
+        # arms run fp8 so the think-vs-nothink comparison differs only in thinking.
+        VLLM_GPU_UTIL=0.92
+        VLLM_MAX_MODEL_LEN=16384
+        # fp8 frees enough KV for ~6.77x concurrency at 16384 (measured 31k KV
+        # tokens), so unlike InternVL (bf16, KV-tight → 2) Qwen can batch more.
+        # 6 keeps well within that headroom while ~3x the throughput of 2.
+        VLLM_MAX_NUM_SEQS=6
+        VLLM_QUANT=",quantization=fp8"
+        # Think arm uses a native thinking-token budget (12288) + 1024 answer
+        # allowance = 13312 total; widen the window to 20480 so that plus the
+        # image prompt fits (still ≤ the ~31k KV pool, so it loads).
+        if [ "$THINKING" = "1" ]; then
+            VLLM_MAX_MODEL_LEN=20480
+        fi
+        export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
         ;;
     *)
         VLLM_GPU_UTIL=0.93
@@ -149,7 +198,58 @@ case "$MODEL_PRETRAINED" in
         ;;
 esac
 
-VLLM_DEFAULT_ARGS="model=$MODEL_PRETRAINED,gpu_memory_utilization=$VLLM_GPU_UTIL,max_model_len=$VLLM_MAX_MODEL_LEN,max_num_seqs=$VLLM_MAX_NUM_SEQS,enforce_eager=True,dtype=bfloat16,trust_remote_code=True,limit_mm_per_prompt={\"image\":1}${VLLM_NO_THINK}${VLLM_REASONING}"
+# Gemma-4's thinking output wraps reasoning in the special tokens
+# <|channel>thought ... <channel|>. Preserve them (skip_special_tokens=False) so
+# the task yaml's reasoning_tags can strip the channel block and isolate the
+# answer; with the default (True) the delimiters vanish and the answer regex
+# reads the reasoning. Only needed for Gemma's thinking arm.
+VLLM_SKIP_SPECIAL=""
+case "$MODEL_PRETRAINED" in
+    *gemma-4-E2B*|*gemma-4-e2b*)
+        [ "$THINKING" = "1" ] && VLLM_SKIP_SPECIAL=",skip_special_tokens=False" ;;
+esac
+
+# Qwen3.5's no-think arm answers with a verbose worked solution (plain prose, NOT
+# a <think> block — enable_thinking=false genuinely suppresses reasoning, verified
+# 0/24 <think> in the no-think smoke) that overflows the terse no-think budget.
+# Coerce a concise answer with a directive appended to the user turn — only Qwen,
+# only no-think (the think arm must stay free to reason). reasoning_prompt lands
+# the directive at the end of the user message; the wrapper turns \n into newlines.
+VLLM_TERSE=""
+case "$MODEL_PRETRAINED" in
+    *Qwen3.5*)
+        [ "$THINKING" = "0" ] && VLLM_TERSE=',reasoning_prompt=\n\nReply with only the final answer and nothing else. No reasoning or explanation.' ;;
+esac
+
+# Qwen think arm: enable vllm's native thinking-token budget. Setting a
+# reasoning_parser makes the wrapper build a ReasoningConfig (simple/vllm.py) so
+# vllm knows the </think> delimiter to force-close at the budget (set per-request
+# via gen_kwargs thinking_token_budget, below). Without this the budget is
+# rejected ("thinking_token_budget is set but reasoning_config is not configured").
+VLLM_REASONING=""
+case "$MODEL_PRETRAINED" in
+    *Qwen3.5*)
+        [ "$THINKING" = "1" ] && VLLM_REASONING=",reasoning_parser=qwen3" ;;
+esac
+
+# Per-family thinking arg for the vllm path. InternVL3.5 has no enable_thinking
+# flag — its thinking is triggered by an R1 *system* prompt (passed as the preset
+# system_prompt=internvl_r1). Qwen3.5/Gemma-4 use the enable_thinking chat-template
+# flag (VLLM_THINK), and Gemma additionally needs skip_special_tokens=False.
+case "$MODEL_PRETRAINED" in
+    *InternVL3*|*internvl3*)
+        # INTERNVL_R1_VARIANT selects the R1 system-prompt preset (internvl_r1 |
+        # internvl_r1_v2 | _v3 | _v4) for prompt-tuning experiments; default is
+        # the committed internvl_r1.
+        VLLM_MODEL_THINK=""
+        [ "$THINKING" = "1" ] && VLLM_MODEL_THINK=",system_prompt=${INTERNVL_R1_VARIANT:-internvl_r1}"
+        ;;
+    *)
+        VLLM_MODEL_THINK="${VLLM_THINK}${VLLM_SKIP_SPECIAL}${VLLM_TERSE}${VLLM_REASONING}"
+        ;;
+esac
+
+VLLM_DEFAULT_ARGS="model=$MODEL_PRETRAINED,gpu_memory_utilization=$VLLM_GPU_UTIL,max_model_len=$VLLM_MAX_MODEL_LEN,max_num_seqs=$VLLM_MAX_NUM_SEQS,enforce_eager=True,dtype=bfloat16,trust_remote_code=True,limit_mm_per_prompt={\"image\":1}${VLLM_MODEL_THINK}${VLLM_QUANT}"
 case "$MODEL_NAME" in
     vllm|vllm_chat)
         : "${MODEL_ARGS:=$VLLM_DEFAULT_ARGS}" ;;
@@ -167,7 +267,7 @@ case "$MODEL_NAME" in
         # CUDA-allocator strategy, so model inputs/tiling/outputs are unchanged
         # and accuracy stays comparable to easy and to the other models.
         export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-        : "${MODEL_ARGS:=pretrained=$MODEL_PRETRAINED,max_num=6}" ;;
+        : "${MODEL_ARGS:=pretrained=$MODEL_PRETRAINED,max_num=6${INTERNVL_THINK}}" ;;
     *)
         # Non-reasoning wrappers (minicpm_v, llama_vision):
         # reasoning_prompt isn't accepted and /no_think wouldn't be recognized
@@ -198,7 +298,7 @@ case "$MODEL_NAME" in
     *) : "${BATCH_SIZE:=1}" ;;
 esac
 
-echo "[run_eval] job=$JOB_NAME model=$MODEL_NAME pretrained=$MODEL_PRETRAINED batch_size=$BATCH_SIZE"
+echo "[run_eval] job=$JOB_NAME model=$MODEL_NAME pretrained=$MODEL_PRETRAINED batch_size=$BATCH_SIZE thinking=$THINKING"
 echo "[run_eval]   tasks=$TASKS dataset_dir=$DATASET_DIR"
 echo "[run_eval]   lmms_tasks=$LMMS_TASKS"
 echo "[run_eval]   label_style=$LABEL_STYLE node_color=$NODE_COLOR edge_style=$EDGE_STYLE adj_matrix=$INCLUDE_ADJ_MATRIX special_coloring=$SPECIAL_COLORING"
@@ -287,15 +387,49 @@ python tools/prepare_dynamic_graph_benchmark.py "${PREPARE_ARGS[@]}"
 
 # --- Step 2: run lmms-eval -----------------------------------------------------
 
-# Thinking-mode SKUs reason inside <think>...</think> and need a much larger
-# max_new_tokens than the task yaml's default (64). Override via --gen_kwargs.
-# (Qwen3.5 used to need this too because it wrote verbose worked-solutions, but
-# the terse reasoning_prompt appendix above now makes it answer in a few tokens,
-# so the default 64-tok budget is correct — and fast.)
+# The thinking arm reasons inside <think>...</think> and needs a much larger
+# max_new_tokens than the task yaml's default (64) so the reasoning block can
+# close before the answer. Override via --gen_kwargs. The no-think arm keeps
+# the 64-tok default (terse single-integer / Yes-No answers).
+# Answer allowance: tokens reserved for the post-reasoning answer. Standard runs
+# use the task-yaml default (64); we use 1024 (>64) so a (possibly verbose)
+# answer always fits — reused as the no-think budget AND the think-arm's extra on
+# top of the thinking budget.
+ANSWER_BUDGET=1024
 EXTRA_LMMS_ARGS=()
-case "$MODEL_PRETRAINED" in
-    *Thinking*) EXTRA_LMMS_ARGS+=(--gen_kwargs "max_new_tokens=4096") ;;
-esac
+if [ "$THINKING" = "1" ]; then
+    # temperature=0.6 is the official guidance for the panel's thinking modes;
+    # do_sample=true is required for the HF wrappers to sample (no-op for vllm).
+    THINK_MAXTOK=4096
+    THINK_TOKEN_BUDGET=""   # native vllm thinking-token budget (Qwen only); "" = off
+    case "$MODEL_PRETRAINED" in
+        # InternVL runs fp8 with a 16k window (see memory tuning), so give its
+        # verbose R1 reasoning a generous budget that rarely truncates.
+        *InternVL3*|*internvl3*) THINK_MAXTOK=12288 ;;
+        # Gemma mostly commits within 4096, but coloring-hard over-deliberates:
+        # ~14% hit the 4096 cap. Its sliding-window attention makes a wider
+        # window cheap, so give it the same 12288 budget as InternVL (fits the
+        # 16384 window with ~4k prompt headroom) to capture the reasoning tail.
+        *gemma-4-E2B*|*gemma-4-e2b*) THINK_MAXTOK=12288 ;;
+        # Qwen3.5 over-deliberates hardest (~40% truncated even at 12288). Use
+        # vllm's NATIVE thinking-token budget to force-close </think> at 12288
+        # thinking tokens, then ANSWER_BUDGET (1024) more for the answer, so the
+        # answer is never lost. Total max_new_tokens = 12288 + 1024 = 13312, which
+        # fits the widened 20480 window. Needs reasoning_parser (set above).
+        *Qwen3.5*) THINK_TOKEN_BUDGET=12288; THINK_MAXTOK=$((12288 + ANSWER_BUDGET)) ;;
+    esac
+    _GEN="max_new_tokens=$THINK_MAXTOK,temperature=0.6,do_sample=true"
+    [ -n "$THINK_TOKEN_BUDGET" ] && _GEN="$_GEN,thinking_token_budget=$THINK_TOKEN_BUDGET"
+    EXTRA_LMMS_ARGS+=(--gen_kwargs "$_GEN")
+else
+    # No-think arm. Standard/task default is 64; Qwen3.5's answers (coerced terse)
+    # fit trivially but we give the ANSWER_BUDGET (1024) so a verbose answer never
+    # truncates. Other models keep the task-yaml default (their no-think numbers
+    # already landed at 64).
+    case "$MODEL_PRETRAINED" in
+        *Qwen3.5*) EXTRA_LMMS_ARGS+=(--gen_kwargs "max_new_tokens=$ANSWER_BUDGET") ;;
+    esac
+fi
 
 if [ "$CHUNK_SIZE" -le 0 ]; then
     # Monolithic path: one symlink, one lmms-eval invocation. Identical to

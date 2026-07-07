@@ -43,6 +43,51 @@ def _append_reasoning_prompt(messages: list, directive: str) -> None:
         return
 
 
+# InternVL3.5's documented thinking trigger is an R1-style *system* prompt
+# (not an enable_thinking chat-template flag). When InternVL runs through this
+# vllm wrapper (for batching/speed), thinking is enabled by prepending this as a
+# system message. Passed via model_args as the preset token `system_prompt=internvl_r1`
+# (the literal string can't survive comma/newline-delimited model_args parsing).
+# Kept in sync with lmms_eval/models/simple/internvl3.py::R1_SYSTEM_PROMPT.
+_INTERNVL_R1_SYSTEM_PROMPT = """You are an AI assistant that rigorously follows this response protocol:
+
+1. First, conduct a detailed analysis of the question. Consider different angles, potential solutions, and reason through the problem step-by-step. Enclose this entire thinking process within <think> and </think> tags.
+
+2. After the thinking section, provide a clear, concise, and direct answer to the user's question. Separate the answer from the think section with a newline.
+
+Ensure that the thinking process is thorough but remains focused on the query. The final answer should be standalone and not reference the thinking section."""
+
+# Prompt-tuning variants for reducing InternVL over-deliberation truncation.
+# Selected per job via INTERNVL_R1_VARIANT (run_eval.sh) -> system_prompt=<preset>.
+# V1 = the faithful R1 with a gentle commit rule swapped into the last paragraph.
+_INTERNVL_R1_V1_COMMIT = """You are an AI assistant that rigorously follows this response protocol:
+
+1. First, conduct a detailed analysis of the question. Consider different angles, potential solutions, and reason through the problem step-by-step. Enclose this entire thinking process within <think> and </think> tags.
+
+2. After the thinking section, provide a clear, concise, and direct answer to the user's question. Separate the answer from the think section with a newline.
+
+Work efficiently: reason only as much as the problem requires. As soon as you have determined the answer and checked it once, immediately close the </think> tag and give the final answer — do not re-examine the graph again or second-guess an answer you have already verified. The final answer should be standalone and not reference the thinking section."""
+
+_INTERNVL_R1_V2_CONCISE = """You are a careful problem-solver. Reason through the problem step by step inside <think> and </think>, but keep it concise: do only the reasoning needed to determine the answer, verify it once, then immediately close </think> and give the final answer on its own line. Do not explore alternative approaches or re-derive an answer you have already reached."""
+
+_INTERNVL_R1_V3_DECISIVE = """Reason step by step inside <think> and </think>, then give the answer. Be decisive: reach a conclusion, verify it once, and commit. Do not write "wait", "actually", "alternatively", or otherwise second-guess an answer you have already found — as soon as you have it, close </think> and state the final answer on its own line."""
+
+_INTERNVL_R1_V4_STEPBUDGET = """Reason inside <think> and </think> using at most a few short steps — no more than necessary to reach the answer. Once you have the answer, verify it a single time, then close </think> and give the final answer on its own line. Never revisit earlier steps or restart your analysis."""
+
+_SYSTEM_PROMPT_PRESETS = {
+    "internvl_r1": _INTERNVL_R1_SYSTEM_PROMPT,
+    "internvl_r1_v1": _INTERNVL_R1_V1_COMMIT,
+    "internvl_r1_v2": _INTERNVL_R1_V2_CONCISE,
+    "internvl_r1_v3": _INTERNVL_R1_V3_DECISIVE,
+    "internvl_r1_v4": _INTERNVL_R1_V4_STEPBUDGET,
+}
+
+
+def _prepend_system_prompt(messages: list, text: str) -> None:
+    """Insert a system message at the front of the conversation (in place)."""
+    messages.insert(0, {"role": "system", "content": [{"type": "text", "text": text}]})
+
+
 @register_model("vllm_chat")
 class VLLM(VLLMSimple):
     is_simple = False
@@ -63,6 +108,8 @@ class VLLM(VLLMSimple):
         nframes: Optional[int] = 32,
         reasoning_prompt: Optional[str] = None,
         chat_template_kwargs: Optional[dict] = None,
+        skip_special_tokens: bool = True,
+        system_prompt: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(
@@ -95,6 +142,16 @@ class VLLM(VLLMSimple):
             except json.JSONDecodeError as e:
                 raise ValueError(f"chat_template_kwargs must be valid JSON: {chat_template_kwargs!r}") from e
         self.chat_template_kwargs = chat_template_kwargs or None
+        # skip_special_tokens=False keeps model special tokens in the decoded
+        # text. Needed for Gemma-4, whose reasoning is delimited by the special
+        # tokens <|channel>thought ... <channel|> — with the default True those
+        # delimiters are stripped and the answer can't be isolated from the
+        # reasoning. The task yaml's reasoning_tags then strip that channel block.
+        self.skip_special_tokens = str(skip_special_tokens).lower() not in ("false", "0", "no")
+        # Optional system prompt, injected as a leading system message. Accepts a
+        # preset token (e.g. "internvl_r1") or a literal string. Used to enable
+        # InternVL3.5 thinking via its R1 system prompt when running through vllm.
+        self.system_prompt = _SYSTEM_PROMPT_PRESETS.get(system_prompt, system_prompt) if system_prompt else None
 
     def make_one_request(self, request: Instance) -> Tuple[list[dict], dict]:
         """
@@ -114,7 +171,16 @@ class VLLM(VLLMSimple):
             "temperature": _gen["temperature"],
             "max_tokens": _gen["max_new_tokens"],
             "top_p": _gen["top_p"],
+            "skip_special_tokens": self.skip_special_tokens,
         }
+        # Native thinking-token budget (vllm SamplingParams): caps the reasoning
+        # separately from the total output — when the budget is hit, vllm forces
+        # the reasoning_end token (</think>) so the model must emit its answer,
+        # which is never lost to truncation. Requires the engine to be built with
+        # a reasoning_parser + reasoning_config (see simple/vllm.py). max_tokens
+        # stays the total cap (budget + answer allowance).
+        if _gen.get("thinking_token_budget") is not None:
+            params["thinking_token_budget"] = int(_gen["thinking_token_budget"])
 
         video_kwargs = {
             "max_pixels": self.max_pixels,
@@ -126,6 +192,8 @@ class VLLM(VLLMSimple):
         else:
             video_kwargs["nframes"] = self.nframes
         messages = chat_messages.to_openai_messages(video_kwargs=video_kwargs)
+        if self.system_prompt:
+            _prepend_system_prompt(messages, self.system_prompt)
         if self.reasoning_prompt:
             _append_reasoning_prompt(messages, self.reasoning_prompt)
         return messages, params
@@ -159,12 +227,16 @@ class VLLM(VLLMSimple):
             end_time = time.time()
 
             response_text = [o.outputs[0].text for o in response]
+            # Record the exact generated (output) token count per response — vllm
+            # gives us the token ids, so the saved jsonl carries real per-sample
+            # output_tokens (used to size think budgets / measure reasoning length).
+            response_tc = [TokenCounts(output_tokens=len(o.outputs[0].token_ids)) for o in response]
 
             # Calculate timing metrics for batch
             total_elapsed_time += end_time - start_time
 
             assert len(response_text) == len(batch_requests)
-            res.extend([GenerationResult(text=resp_text, token_counts=sample_token_counts) for resp_text in response_text])
+            res.extend([GenerationResult(text=resp_text, token_counts=tc) for resp_text, tc in zip(response_text, response_tc)])
             pbar.update(len(batch_requests))
 
         if not self.disable_log_stats:

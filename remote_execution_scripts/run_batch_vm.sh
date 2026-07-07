@@ -1,0 +1,218 @@
+#!/bin/bash
+# =============================================================================
+# run_batch_vm.sh [--vm NAME] -f manifest.txt [--name BATCH] [--status] [--force]
+# -----------------------------------------------------------------------------
+# Like run_batch.sh, but the QUEUE ITSELF runs on the VM. For each job we
+# generate the exact same self-contained launcher 02_run.sh produces (env vars
+# baked in, SSD caches set, .venv activated, per-job run.log + exit_code), upload
+# all of them, then start ONE detached tmux session running a master driver that
+# executes the launchers sequentially.
+#
+# Why: the local orchestration in run_batch.sh dies whenever the driving process
+# is killed (long-lived background commands get reaped by the environment), which
+# stops the whole queue. Here the orchestration lives in VM tmux, so a killed
+# local shell is irrelevant — the batch keeps going. Poll it with --status and
+# fetch results with 04_fetch.sh per job when the batch.status file says COMPLETE.
+#
+# Deploy: assumes the repo is already deployed (all graph_benchmark jobs share
+# identical UPLOAD_PATHS/REMOTE_SETUP_CMD). Run ./01_deploy.sh <any-job> once
+# first if unsure. Datasets are generated on the VM per job by run_eval.sh.
+#
+# Resume: re-running is safe. run_eval.sh is chunk-resumable and fingerprint-
+# aware, so already-finished jobs fast-forward (chunk sentinels already 'done')
+# and a crashed job resumes from its first pending chunk.
+#
+#   --name BATCH  Batch id (default: manifest basename). Names the tmux session
+#                 (lmms_batch_<BATCH>) and the VM staging dir.
+#   --status      Print the batch status/progress and exit (no launch).
+#   --force       Stop and replace a running batch session of the same name.
+# =============================================================================
+
+set -euo pipefail
+
+# shellcheck disable=SC1091
+source "$(dirname "$0")/lib/common.sh"
+bootstrap "$@"
+set -- ${REMAINING_ARGS[@]+"${REMAINING_ARGS[@]}"}
+
+MANIFEST=""
+BATCH_NAME=""
+STATUS_ONLY=0
+FORCE=0
+JOBS=()
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -f|--file)
+            [ -f "$2" ] || fail "manifest not found: $2"
+            [ -z "$BATCH_NAME" ] && { BATCH_NAME="$(basename "$2")"; BATCH_NAME="${BATCH_NAME%.txt}"; }
+            while IFS= read -r line; do
+                line="${line%%#*}"; line="${line//[$'\t\r\n ']/}"
+                [ -n "$line" ] && JOBS+=("$line")
+            done <"$2"
+            MANIFEST="$2"; shift 2 ;;
+        --name) BATCH_NAME="$2"; shift 2 ;;
+        --status) STATUS_ONLY=1; shift ;;
+        --force) FORCE=1; shift ;;
+        *) JOBS+=("$1"); shift ;;
+    esac
+done
+
+[ -n "$BATCH_NAME" ] || fail "no batch name; pass -f <manifest> or --name <name>"
+SESSION="lmms_batch_${BATCH_NAME}"
+BATCH_DIR="${REMOTE_RUNS_DIR}/_batch_${BATCH_NAME}"
+
+# --- status mode -------------------------------------------------------------
+if [ "$STATUS_ONLY" = "1" ]; then
+    log "batch '${BATCH_NAME}' on [${VM_PROFILE}] ${VM_USER}@${VM_HOST}"
+    if ssh_cmd "tmux has-session -t '$SESSION' 2>/dev/null"; then
+        echo "  tmux: RUNNING ($SESSION)"
+    else
+        echo "  tmux: not running"
+    fi
+    ssh_cmd "cat '${BATCH_DIR}/batch.status' 2>/dev/null" | sed 's/^/  status: /' || echo "  status: <none>"
+    echo "  --- master.log tail ---"
+    ssh_cmd "tail -n 25 '${BATCH_DIR}/master.log' 2>/dev/null" | sed 's/^/  /' || true
+    exit 0
+fi
+
+[ "${#JOBS[@]}" -gt 0 ] || fail "no jobs to run"
+
+if ssh_cmd "tmux has-session -t '$SESSION' 2>/dev/null"; then
+    if [ "$FORCE" = "1" ]; then
+        warn "stopping existing batch session '$SESSION'"
+        ssh_cmd "tmux kill-session -t '$SESSION' 2>/dev/null" || true
+    else
+        fail "batch session '$SESSION' already running. Use --status to watch, or --force to replace."
+    fi
+fi
+
+log "ssh target: [${VM_PROFILE}] ${VM_USER}@${VM_HOST}:${VM_PORT} → $(ssh_cmd hostname 2>/dev/null || echo UNREACHABLE)"
+log "batch '${BATCH_NAME}': ${#JOBS[@]} jobs → staging ${BATCH_DIR}"
+
+# Fresh staging dir (launchers + master + status). Keeps per-job $RUN_DIR state
+# (chunk sentinels) untouched so resume still works.
+ssh_cmd "rm -rf '${BATCH_DIR}' && mkdir -p '${BATCH_DIR}'"
+
+# --- emit one launcher per job (byte-identical to 02_run.sh's) ---------------
+emit_launcher() {
+    # $1 = job id (path under jobs/, no .conf); $2 = local output file.
+    local job_arg="$1" out="$2"
+    ( # subshell so load_job's sourced conf vars don't leak between jobs
+        load_job "$job_arg"
+        local RUN_DIR LOG_PATH
+        RUN_DIR="$(remote_run_dir "$JOB_NAME")"
+        LOG_PATH="$(remote_log_path "$JOB_NAME")"
+
+        local JOB_EXPORTS_BLOCK=""
+        if declare -p JOB_EXPORTS >/dev/null 2>&1 && [ "${#JOB_EXPORTS[@]}" -gt 0 ]; then
+            local _v
+            for _v in "${JOB_EXPORTS[@]}"; do
+                JOB_EXPORTS_BLOCK+="$(printf 'export %s=%q\n' "$_v" "${!_v}")"$'\n'
+            done
+        fi
+
+        cat > "$out" <<EOF
+#!/bin/bash
+# Auto-generated by run_batch_vm.sh — do not edit on the VM.
+set -u
+RUN_DIR='${RUN_DIR}'
+LOG_PATH='${LOG_PATH}'
+
+mkdir -p "\$RUN_DIR"
+: > "\$LOG_PATH"
+rm -f "\$RUN_DIR/exit_code"
+
+exec > >(tee -a "\$LOG_PATH") 2>&1
+
+export HF_HOME='${REMOTE_HF_HOME}'
+export UV_CACHE_DIR='${REMOTE_UV_CACHE_DIR}'
+export XDG_CACHE_HOME='${REMOTE_XDG_CACHE_HOME}'
+export TRITON_HOME='${REMOTE_TRITON_HOME}'
+export TRITON_CACHE_DIR='${REMOTE_TRITON_CACHE_DIR}'
+export TMPDIR='${REMOTE_TMPDIR}'
+export FLASHINFER_WORKSPACE_BASE='${REMOTE_FLASHINFER_WORKSPACE_BASE}'
+mkdir -p "\$XDG_CACHE_HOME" "\$TRITON_CACHE_DIR" "\$TMPDIR" "\$FLASHINFER_WORKSPACE_BASE"
+
+export JOB_NAME='${JOB_NAME}'
+export RUN_DIR='${RUN_DIR}'
+
+${JOB_EXPORTS_BLOCK}
+cd '${REMOTE_WORKDIR}'
+
+if [ ! -f .venv/bin/activate ]; then
+    echo "[fatal] .venv/bin/activate not found in \$(pwd) — did 01_deploy.sh run uv sync?"
+    echo 1 > "\$RUN_DIR/exit_code"
+    exit 1
+fi
+# shellcheck disable=SC1091
+source .venv/bin/activate
+
+echo "[start] \$(date -Iseconds) job=${JOB_NAME}"
+echo "[cwd]   \$(pwd)"
+echo "--- begin output ---"
+(
+${REMOTE_RUN_CMD}
+)
+ec=\$?
+echo "--- end output ---"
+echo "\$ec" > "\$RUN_DIR/exit_code"
+echo "[end] \$(date -Iseconds) exit=\$ec"
+EOF
+    )
+}
+
+TMP_STAGE="$(mktemp -d -t lmms_batch.XXXXXX)"
+trap 'rm -rf "$TMP_STAGE"' EXIT
+
+i=0
+for job in "${JOBS[@]}"; do
+    i=$((i + 1))
+    printf -v idx '%04d' "$i"
+    safe="${job//\//_}"
+    local_out="${TMP_STAGE}/launch_${idx}_${safe}.sh"
+    emit_launcher "$job" "$local_out"
+    scp_up "$local_out" "${BATCH_DIR}/$(basename "$local_out")"
+    log "  staged [${idx}/${#JOBS[@]}] ${job}"
+done
+
+# --- master driver (runs on the VM inside tmux) ------------------------------
+MASTER_LOCAL="${TMP_STAGE}/_master.sh"
+cat > "$MASTER_LOCAL" <<EOF
+#!/bin/bash
+set -u
+BATCH_DIR='${BATCH_DIR}'
+MASTER_LOG="\$BATCH_DIR/master.log"
+STATUS="\$BATCH_DIR/batch.status"
+exec > >(tee -a "\$MASTER_LOG") 2>&1
+
+launchers=( "\$BATCH_DIR"/launch_*.sh )
+total=\${#launchers[@]}
+echo "[batch] start \$(date -Iseconds) — \$total jobs"
+i=0
+for L in "\${launchers[@]}"; do
+    i=\$((i + 1))
+    name="\$(basename "\$L")"
+    echo "==================================================================="
+    echo "[batch] [\$i/\$total] \$name \$(date -Iseconds)"
+    echo "==================================================================="
+    echo "RUNNING \$i/\$total \$name \$(date -Iseconds)" > "\$STATUS"
+    bash "\$L" || echo "[batch] launcher returned nonzero (see per-job run.log)"
+    echo "DONE \$i/\$total \$name \$(date -Iseconds)" > "\$STATUS"
+done
+echo "[batch] COMPLETE \$(date -Iseconds)"
+echo "COMPLETE \$total/\$total \$(date -Iseconds)" > "\$STATUS"
+EOF
+
+scp_up "$MASTER_LOCAL" "${BATCH_DIR}/_master.sh"
+ssh_cmd "chmod +x '${BATCH_DIR}'/*.sh && tmux new-session -d -s '$SESSION' 'bash ${BATCH_DIR}/_master.sh'"
+
+if ! ssh_cmd "tmux has-session -t '$SESSION' 2>/dev/null"; then
+    fail "batch session '$SESSION' did not start."
+fi
+
+log "${C_G}batch launched${C_RESET} in tmux session '$SESSION'"
+echo ""
+echo "  status:   ./run_batch_vm.sh --vm ${VM_PROFILE} -f ${MANIFEST:-<manifest>} --status"
+echo "  or:       ssh <vm> 'cat ${BATCH_DIR}/batch.status'"
+echo "  fetch:    ./04_fetch.sh <job>   (per job, once batch.status says COMPLETE)"

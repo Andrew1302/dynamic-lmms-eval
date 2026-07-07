@@ -45,7 +45,11 @@ def autosize(ws) -> None:
 
 def write_accuracy_cell(cell, value: float) -> None:
     cell.value = value
-    cell.number_format = "0.00%"
+    # Plain decimal (0.34), NOT a percent format. A "0.00%" format stores the
+    # fraction and relies on the viewer multiplying by 100; lightweight xlsx
+    # viewers that append the literal "%" without scaling render "0.34%", which
+    # is wrong. A decimal is unambiguous in every viewer.
+    cell.number_format = "0.00"
     cell.alignment = CENTER
     cell.border = CELL_BORDER
     # Light pass/fail colouring at extreme thresholds. Avoids noise on

@@ -29,6 +29,20 @@ DEFAULT_GEN_KWARGS = dict(
     do_sample=False,
 )
 
+# InternVL3.5's documented "thinking" trigger: an R1-style system prompt that
+# instructs the model to reason inside <think>...</think> and then give a
+# standalone answer. Set via `think=1` in model_args; the wrapper assigns it to
+# model.system_message (read by InternVLChatModel.chat). Verbatim from the
+# OpenGVLab/InternVL3_5-4B model card. The task yaml's reasoning_tags strip the
+# <think>...</think> block before scoring.
+R1_SYSTEM_PROMPT = """You are an AI assistant that rigorously follows this response protocol:
+
+1. First, conduct a detailed analysis of the question. Consider different angles, potential solutions, and reason through the problem step-by-step. Enclose this entire thinking process within <think> and </think> tags.
+
+2. After the thinking section, provide a clear, concise, and direct answer to the user's question. Separate the answer from the think section with a newline.
+
+Ensure that the thinking process is thorough but remains focused on the query. The final answer should be standalone and not reference the thinking section."""
+
 
 @contextmanager
 def _force_linspace_on_cpu():
@@ -292,6 +306,7 @@ class InternVL3(lmms):
         max_num: int = 12,
         total_max_num: int = 64,
         use_flash_attn: bool = True,
+        think: bool = False,
         **kwargs,
     ):
         super().__init__()
@@ -300,6 +315,10 @@ class InternVL3(lmms):
         self.num_frame = num_frame
         self.max_num = max_num
         self.total_max_num = total_max_num
+        # `think=1` in model_args enables InternVL3.5's reasoning mode by setting
+        # the R1 system prompt below (applied after the model loads). Accept the
+        # usual truthy string spellings coming from the model_args parser.
+        self.think = str(think).lower() in ("1", "true", "yes")
 
         batch_size_int = int(batch_size)
         assert batch_size_int == 1, f"Batch size should be 1 for InternVL3, but got {batch_size_int}."
@@ -367,6 +386,12 @@ class InternVL3(lmms):
             self._world_size = 1
 
         self.modality = modality
+
+        # Thinking mode: assign the R1 system prompt so InternVLChatModel.chat
+        # builds the conversation with it. Off by default = instruct behavior.
+        if self.think:
+            self.model.system_message = R1_SYSTEM_PROMPT
+            eval_logger.info("[InternVL3] thinking mode ON — R1 system prompt set")
 
     @property
     def config(self):

@@ -83,6 +83,21 @@ CHUNK_STANDARD = 500
 CHUNK_ABLATION = 100
 CHUNK_SWEEP = 200
 
+# Thinking-vs-no-thinking ablation. n=100/task/difficulty; one arm per THINKING
+# value. Thinking generations are long (max_new_tokens=4096) and slow, so the
+# think arm uses a smaller chunk so a mid-run failure resumes with less lost work.
+THINK_ABLATION_N = 100
+CHUNK_THINK = 50
+
+# Thinking-ablation panel — all three 4B models. Qwen3.5-4B is now included:
+# its no-think arm is coerced terse by a reasoning_prompt directive (fits the
+# 1024-tok answer budget) and its think arm uses vllm's native thinking-token
+# budget (12288) so its heavy over-deliberation force-closes </think> instead of
+# truncating the answer (was ~40% lost → ~0%). InternVL3.5 (R1 <think> prompt,
+# fp8) and Gemma-4-E2B (enable_thinking, bf16) as before. Per-model thinking
+# mechanism + budgets all live in run_eval.sh keyed on MODEL_PRETRAINED.
+THINK_MODELS = MODELS_4B
+
 
 _PREAMBLE = """\
 # =============================================================================
@@ -456,6 +471,152 @@ def main() -> None:
                 env=env,
             )
             batches[batch].append(name)
+
+    # --- Thinking vs no-thinking ablation: difficulty-separated, n=100/task ----
+    # Two arms (THINKING=0/1) × 3 difficulties × 3 models. Mirrors the standard
+    # per-difficulty split: a coloring-only job (special χ∈{2,3,4}) plus a
+    # directed_connectivity+shortest_path job, so all three tasks are covered at
+    # n=100/task. The run_eval THINKING flag flips enable_thinking (vllm) / the
+    # R1 system prompt (InternVL) and raises max_new_tokens to 4096. The think
+    # arm's coloring/conn+sp jobs are the expensive ones (long reasoning).
+    think_jobs: list[str] = []
+    nothink_jobs: list[str] = []
+    for mode, thinking in (("nothink", "0"), ("think", "1")):
+        bucket = think_jobs if thinking == "1" else nothink_jobs
+        chunk = CHUNK_THINK if thinking == "1" else CHUNK_ABLATION
+        for diff in STANDARD_DIFFICULTIES:
+            for m in THINK_MODELS:
+                # coloring only, balanced χ∈{2,3,4} (special coloring)
+                cname = f"graph_bench_think_{mode}_coloring_{diff}_{m.short}"
+                cenv = _standard_env(THINK_ABLATION_N, chunk)
+                cenv["DIFFICULTY"] = diff
+                cenv.pop("DIFFICULTY_OVERRIDES", None)
+                cenv["TASKS"] = "coloring"
+                cenv["SPECIAL_COLORING"] = "1"
+                cenv["THINKING"] = thinking
+                cenv["MODEL_PRETRAINED"] = m.pretrained
+                # InternVL runs through vllm for the ablation (batched/fast, and
+                # temperature actually applies — the HF wrapper silently drops it).
+                # Its R1 thinking is set by run_eval via system_prompt=internvl_r1.
+                # Both arms use vllm so they differ only by thinking; Gemma already
+                # maps to vllm.
+                if m.short == "internvl35_4b":
+                    cenv["MODEL_NAME_OVERRIDE"] = "vllm"
+                    cenv["INTERNVL_R1_VARIANT"] = "internvl_r1_v1"  # commit-rule R1 (0% trunc, best acc)
+                _write_conf(
+                    name=cname,
+                    description=(
+                        f"Thinking ablation ({mode}): coloring only, balanced "
+                        f"χ∈{{2,3,4}} (special-coloring), n={THINK_ABLATION_N}/task, "
+                        f"difficulty={diff} for {m.pretrained}"
+                    ),
+                    env=cenv,
+                )
+                bucket.append(cname)
+                # directed_connectivity + shortest_path
+                name = f"graph_bench_think_{mode}_{diff}_{m.short}"
+                env = _standard_env(THINK_ABLATION_N, chunk)
+                env["DIFFICULTY"] = diff
+                env.pop("DIFFICULTY_OVERRIDES", None)
+                env["TASKS"] = "directed_connectivity shortest_path"
+                env["THINKING"] = thinking
+                env["MODEL_PRETRAINED"] = m.pretrained
+                if m.short == "internvl35_4b":
+                    env["MODEL_NAME_OVERRIDE"] = "vllm"
+                    env["INTERNVL_R1_VARIANT"] = "internvl_r1_v1"  # commit-rule R1 (0% trunc, best acc)
+                _write_conf(
+                    name=name,
+                    description=(
+                        f"Thinking ablation ({mode}): directed_connectivity + "
+                        f"shortest_path, n={THINK_ABLATION_N}/task, difficulty={diff} "
+                        f"for {m.pretrained}"
+                    ),
+                    env=env,
+                )
+                bucket.append(name)
+
+    batches["think_ablation"] = think_jobs + nothink_jobs
+    # Split across the two eval VMs. Interleave *within* each arm so vm02 and
+    # vm03 each get ~half the (slow) think jobs and ~half the no-think jobs —
+    # balance by cost, not job count.
+    batches["think_ablation_vm02"] = think_jobs[0::2] + nothink_jobs[0::2]
+    batches["think_ablation_vm03"] = think_jobs[1::2] + nothink_jobs[1::2]
+
+    # --- Thinking × adjacency-list combined ablation --------------------------
+    # Crosses the two ablation axes: run the *entire, already-proven* thinking
+    # ablation (both arms, 3 models, 3 difficulties, all tasks, the per-model
+    # think mechanism + fp8/budget tuning that live in run_eval.sh) but ALSO
+    # inject the text adjacency list into the prompt (INCLUDE_ADJ_MATRIX=1). The
+    # only difference from graph_bench_think_* is the adjacency-list prompt, so
+    # the think-vs-nothink effect stays directly comparable to the image-only
+    # thinking ablation, and thinkadj-vs-think isolates the adjacency effect.
+    def _emit_thinkadj(job_prefix, num_samples, thinking_chunk, difficulties, smoke):
+        think_j: list[str] = []
+        nothink_j: list[str] = []
+        for mode, thinking in (("nothink", "0"), ("think", "1")):
+            bucket = think_j if thinking == "1" else nothink_j
+            chunk = thinking_chunk if thinking == "1" else CHUNK_ABLATION
+            for diff in difficulties:
+                for m in THINK_MODELS:
+                    for tasks, special, infix in (
+                        ("coloring", True, "coloring_"),
+                        ("directed_connectivity shortest_path", False, ""),
+                    ):
+                        name = f"{job_prefix}_{mode}_{infix}{diff}_{m.short}"
+                        env = _standard_env(num_samples, chunk)
+                        env["DIFFICULTY"] = diff
+                        env.pop("DIFFICULTY_OVERRIDES", None)
+                        env["TASKS"] = tasks
+                        if special:
+                            env["SPECIAL_COLORING"] = "1"
+                        env["INCLUDE_ADJ_MATRIX"] = "1"
+                        env["THINKING"] = thinking
+                        env["MODEL_PRETRAINED"] = m.pretrained
+                        # Mirror the pure thinking ablation exactly: InternVL runs
+                        # through vllm with the commit-rule R1 preset (0% trunc).
+                        if m.short == "internvl35_4b":
+                            env["MODEL_NAME_OVERRIDE"] = "vllm"
+                            env["INTERNVL_R1_VARIANT"] = "internvl_r1_v1"
+                        tasklabel = (
+                            "coloring only (special-coloring χ∈{2,3,4} uniform)"
+                            if special else "directed_connectivity + shortest_path"
+                        )
+                        _write_conf(
+                            name=name,
+                            description=(
+                                f"Thinking×adjacency-list ablation ({mode}"
+                                f"{', SMOKE' if smoke else ''}): {tasklabel}, "
+                                f"adjacency list injected in prompt, "
+                                f"n={num_samples}/task, difficulty={diff} "
+                                f"for {m.pretrained}"
+                            ),
+                            env=env,
+                        )
+                        bucket.append(name)
+        return think_j, nothink_j
+
+    # Full combined ablation: 2 arms × 3 diff × 3 models × 2 job-types = 36 jobs,
+    # n=100/task. Same cost-balanced VM interleave as the pure thinking ablation.
+    ta_think, ta_nothink = _emit_thinkadj(
+        "graph_bench_thinkadj", THINK_ABLATION_N, CHUNK_THINK,
+        STANDARD_DIFFICULTIES, smoke=False,
+    )
+    batches["thinkadj_ablation"] = ta_think + ta_nothink
+    batches["thinkadj_ablation_vm02"] = ta_think[0::2] + ta_nothink[0::2]
+    batches["thinkadj_ablation_vm03"] = ta_think[1::2] + ta_nothink[1::2]
+
+    # Smoke gate: hard only (worst case for prompt length + over-deliberation),
+    # n=10, both arms, all 3 models, both job-types = 12 jobs. Confirms before
+    # the multi-hour full run that (a) the adjacency list is injected alongside
+    # thinking, (b) the longer prompt doesn't OOM the 12 GiB card, (c) reasoning
+    # still closes (Qwen native budget) with ~0 truncation, (d) the answer stays
+    # isolated from the adjacency-list integers. Split 6/6 across the two VMs.
+    sm_think, sm_nothink = _emit_thinkadj(
+        "graph_bench_thinkadjsmoke", 10, CHUNK_THINK, ("hard",), smoke=True,
+    )
+    batches["thinkadj_smoke"] = sm_think + sm_nothink
+    batches["thinkadj_smoke_vm02"] = sm_think[0::2] + sm_nothink[0::2]
+    batches["thinkadj_smoke_vm03"] = sm_think[1::2] + sm_nothink[1::2]
 
     # --- Combined difficulty-separated ablation batch -------------------------
     # labels(letters+none) + node-color, difficulty-separated, n=100/task, all

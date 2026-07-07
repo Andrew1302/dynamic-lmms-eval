@@ -188,6 +188,22 @@ class VLLM(lmms):
                 except json.JSONDecodeError:
                     eval_logger.warning(f"Failed to parse JSON-like string for argument '{key}': {value}")
 
+        # When a reasoning_parser is set, build a ReasoningConfig so vllm can
+        # enforce SamplingParams.thinking_token_budget (it needs the reasoning
+        # delimiters to force-close at the budget). Defaults (<think>/</think>)
+        # match Qwen3.5/DeepSeek-R1; override via reasoning_start_str /
+        # reasoning_end_str model_args if a model uses different tags.
+        if kwargs.get("reasoning_parser") and "reasoning_config" not in kwargs:
+            try:
+                from vllm.config import ReasoningConfig
+            except Exception:  # noqa: BLE001 - fall back to submodule path
+                from vllm.config.reasoning import ReasoningConfig
+            start = kwargs.pop("reasoning_start_str", "<think>")
+            end = kwargs.pop("reasoning_end_str", "</think>")
+            kwargs["reasoning_config"] = ReasoningConfig(
+                reasoning_start_str=start, reasoning_end_str=end
+            )
+
         # Set up vllm client
         os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 

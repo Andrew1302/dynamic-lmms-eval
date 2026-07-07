@@ -64,7 +64,85 @@ from compare_direct_disguise import (
 
 # Order matters: more specific prefixes first so "labels_letters" wins over a
 # generic "labels" match.
-_AXIS_PREFIXES: list[tuple[str, str, str]] = [
+def _ablation_diff_prefixes() -> list[tuple[str, str, str]]:
+    """Difficulty-separated label/color ablation prefixes (n=100 campaign).
+
+    Each (style|color, difficulty) yields a conn+shortest_path job and a
+    coloring-only special-coloring job. These must precede the generic
+    ``graph_bench_ablation_labels_*`` / ``graph_bench_ablation_color_`` prefixes
+    so the difficulty lands in axis_value and model_short stays just the model.
+    """
+    out: list[tuple[str, str, str]] = []
+    diffs = ("easy", "medium", "hard")
+    for style in ("letters", "none"):
+        for d in diffs:
+            # coloring prefix is longer; order within a (style,d) is irrelevant
+            # (the two job families are disjoint) but keep coloring first.
+            out.append(
+                (f"graph_bench_ablation_labels_{style}_coloring_{d}_",
+                 "labels", f"{style}/coloring/{d}")
+            )
+            out.append(
+                (f"graph_bench_ablation_labels_{style}_{d}_",
+                 "labels", f"{style}/{d}")
+            )
+    for d in diffs:
+        out.append(
+            (f"graph_bench_ablation_color_coloring_{d}_", "color", f"coloring/{d}")
+        )
+        out.append(
+            (f"graph_bench_ablation_color_{d}_", "color", d)
+        )
+    return out
+
+
+def _thinking_diff_prefixes() -> list[tuple[str, str, str]]:
+    """Thinking-vs-no-thinking ablation prefixes (n=100 campaign).
+
+    Jobs are ``graph_bench_think_{arm}_{diff}_{model}`` (conn+shortest_path) and
+    ``graph_bench_think_{arm}_coloring_{diff}_{model}`` (special-coloring), for
+    ``arm in {think, nothink}``. Coloring prefix is listed first (it is longer)
+    so the difficulty lands in axis_value and model_short stays just the model.
+    """
+    out: list[tuple[str, str, str]] = []
+    for arm in ("think", "nothink"):
+        for d in ("easy", "medium", "hard"):
+            out.append(
+                (f"graph_bench_think_{arm}_coloring_{d}_",
+                 "thinking", f"{arm}/coloring/{d}")
+            )
+            out.append(
+                (f"graph_bench_think_{arm}_{d}_",
+                 "thinking", f"{arm}/{d}")
+            )
+    return out
+
+
+def _thinkadj_diff_prefixes() -> list[tuple[str, str, str]]:
+    """Thinking × adjacency-list combined ablation prefixes (n=100 campaign).
+
+    Jobs are ``graph_bench_thinkadj_{arm}_{diff}_{model}`` (conn+shortest_path)
+    and ``graph_bench_thinkadj_{arm}_coloring_{diff}_{model}`` (special-coloring)
+    — same layout as the pure thinking ablation but with the adjacency list in
+    the prompt. axis="thinking_adj" keeps them a distinct family in the report so
+    they don't blend with the image-only thinking jobs. Coloring prefix first (it
+    is longer) so the difficulty lands in axis_value, model stays the model.
+    """
+    out: list[tuple[str, str, str]] = []
+    for arm in ("think", "nothink"):
+        for d in ("easy", "medium", "hard"):
+            out.append(
+                (f"graph_bench_thinkadj_{arm}_coloring_{d}_",
+                 "thinking_adj", f"{arm}/coloring/{d}")
+            )
+            out.append(
+                (f"graph_bench_thinkadj_{arm}_{d}_",
+                 "thinking_adj", f"{arm}/{d}")
+            )
+    return out
+
+
+_AXIS_PREFIXES: list[tuple[str, str, str]] = _thinkadj_diff_prefixes() + _thinking_diff_prefixes() + _ablation_diff_prefixes() + [
     # (prefix, axis, axis_value)
     # Difficulty-separated standard runs — most specific first so the difficulty
     # lands in axis_value and model_short stays just the model.
