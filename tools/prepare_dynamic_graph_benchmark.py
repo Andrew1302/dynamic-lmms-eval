@@ -95,6 +95,12 @@ def _parse_constraint_values(spec: str) -> list[int]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prepare Dynamic Graph Benchmark dataset for lmms-eval")
     parser.add_argument("--num-samples", type=int, default=100, help="Number of generations per task (each yields 1 direct + 1 disguise row)")
+    parser.add_argument("--start-index", type=int, default=0,
+                        help="First sample index to generate (standard mode only). Generation is "
+                             "prefix-stable — sample i is a pure function of (seed, task, i) — so "
+                             "--start-index 100 --num-samples 400 yields exactly samples 100..499, "
+                             "identical to positions 100..499 of a 500-sample run. Lets an existing "
+                             "n=100 run be reused: run the incremental 400 and pool at report time.")
     parser.add_argument("--difficulty", choices=["easy", "medium", "hard"], default="medium",
                         help="Default difficulty applied to every task. Override per task with --difficulty-override.")
     parser.add_argument("--difficulty-override", action="append", default=[], type=_parse_difficulty_override,
@@ -303,6 +309,7 @@ def _fingerprint(args: argparse.Namespace) -> dict:
     return {
         "seed": int(args.seed),
         "num_samples": int(args.num_samples),
+        "start_index": int(args.start_index),
         "tasks": sorted(args.tasks) if args.tasks else None,
         "difficulty": args.difficulty,
         "difficulty_override": overrides,
@@ -625,7 +632,12 @@ def _generate_standard(args, cfg, task_names):
         # process, which made seeds — and therefore generated graphs — differ
         # across invocations of this script even with --seed fixed.
         task_salt = zlib.crc32(task_name.encode("utf-8")) % 1000
-        for i in range(args.num_samples):
+        # start_index offset lets an incremental run generate samples
+        # [start_index, start_index+num_samples). Because seed and χ depend only
+        # on the global index i, these rows are byte-identical to the same slice
+        # of a single larger run — so an existing n=100 run (i∈[0,100)) and an
+        # incremental n=400 run (i∈[100,500)) pool into an exact n=500 dataset.
+        for i in range(args.start_index, args.start_index + args.num_samples):
             seed = args.seed + i * 1000 + task_salt
             # Special coloring: plant χ linearly across {2,3,4} so the answer
             # distribution is uniform. Sample i cycles 2→3→4→2… (i % 3).

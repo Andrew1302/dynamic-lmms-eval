@@ -550,7 +550,8 @@ def main() -> None:
     # only difference from graph_bench_think_* is the adjacency-list prompt, so
     # the think-vs-nothink effect stays directly comparable to the image-only
     # thinking ablation, and thinkadj-vs-think isolates the adjacency effect.
-    def _emit_thinkadj(job_prefix, num_samples, thinking_chunk, difficulties, smoke):
+    def _emit_thinkadj(job_prefix, num_samples, thinking_chunk, difficulties, smoke,
+                       start_index=0):
         think_j: list[str] = []
         nothink_j: list[str] = []
         for mode, thinking in (("nothink", "0"), ("think", "1")):
@@ -571,6 +572,10 @@ def main() -> None:
                             env["SPECIAL_COLORING"] = "1"
                         env["INCLUDE_ADJ_MATRIX"] = "1"
                         env["THINKING"] = thinking
+                        # Incremental run: generate samples [start_index, +num_samples)
+                        # so an existing lower-N run can be reused (prefix-stable gen).
+                        if start_index:
+                            env["START_INDEX"] = str(start_index)
                         env["MODEL_PRETRAINED"] = m.pretrained
                         # Mirror the pure thinking ablation exactly: InternVL runs
                         # through vllm with the commit-rule R1 preset (0% trunc).
@@ -605,6 +610,22 @@ def main() -> None:
     batches["thinkadj_ablation_vm02"] = ta_think[0::2] + ta_nothink[0::2]
     batches["thinkadj_ablation_vm03"] = ta_think[1::2] + ta_nothink[1::2]
 
+    # --- thinkadj at n=500 (standard sample size), INCREMENTAL ----------------
+    # The n=100 thinkadj run already exists. Generation is prefix-stable (sample i
+    # = f(seed, task, i), independent of N — verified), so we only run the extra
+    # 400 samples (indices 100..499, START_INDEX=100) per cell and POOL with the
+    # existing 100 at report time to get an exact n=500 result. Same per-model
+    # think mechanism/budgets as thinkadj (all in run_eval.sh). 36 jobs.
+    inc_think, inc_nothink = _emit_thinkadj(
+        "graph_bench_thinkadj500inc", 400, CHUNK_THINK,
+        STANDARD_DIFFICULTIES, smoke=False, start_index=100,
+    )
+    batches["thinkadj500inc"] = inc_think + inc_nothink
+    # Cost-balanced VM split: interleave within each arm so each VM gets ~half
+    # the slow (InternVL) think jobs and ~half the fast no-think jobs.
+    batches["thinkadj500inc_vm02"] = inc_think[0::2] + inc_nothink[0::2]
+    batches["thinkadj500inc_vm03"] = inc_think[1::2] + inc_nothink[1::2]
+
     # Smoke gate: hard only (worst case for prompt length + over-deliberation),
     # n=10, both arms, all 3 models, both job-types = 12 jobs. Confirms before
     # the multi-hour full run that (a) the adjacency list is injected alongside
@@ -617,6 +638,71 @@ def main() -> None:
     batches["thinkadj_smoke"] = sm_think + sm_nothink
     batches["thinkadj_smoke_vm02"] = sm_think[0::2] + sm_nothink[0::2]
     batches["thinkadj_smoke_vm03"] = sm_think[1::2] + sm_nothink[1::2]
+
+    # --- Scrambled-image (no-image control) x thinking x adjacency-list -------
+    # Identical to the thinkadj THINK condition (adjacency list + thinking) except
+    # the rendered image is pixel-shuffled at eval load (SCRAMBLE_IMAGE=1, handled
+    # in utils.dynamic_graph_benchmark_doc_to_visual): the image is present with
+    # identical vision-token cost but carries no recoverable graph structure. If
+    # accuracy matches the intact-image thinkadj run, the image wasn't helping —
+    # a "dummy but necessary" control. Think arm only. (NO_IMAGE=1, drop image
+    # entirely, is also wired in doc_to_visual for the later true-no-image run.)
+    # Both arms: think (reasoning on) and nothink (reasoning off) — so the image
+    # effect can be read in each arm, giving the full 2x2 with the intact-image
+    # thinkadj runs (intact/scrambled x think/nothink).
+    def _emit_scram(difficulties):
+        think_j: list[str] = []
+        nothink_j: list[str] = []
+        for mode, thinking in (("think", "1"), ("nothink", "0")):
+            bucket = think_j if thinking == "1" else nothink_j
+            chunk = CHUNK_THINK if thinking == "1" else CHUNK_ABLATION
+            for diff in difficulties:
+                for m in THINK_MODELS:
+                    for tasks, special, infix in (
+                        ("coloring", True, "coloring_"),
+                        ("directed_connectivity shortest_path", False, ""),
+                    ):
+                        name = f"graph_bench_scram_{mode}_{infix}{diff}_{m.short}"
+                        env = _standard_env(THINK_ABLATION_N, chunk)
+                        env["DIFFICULTY"] = diff
+                        env.pop("DIFFICULTY_OVERRIDES", None)
+                        env["TASKS"] = tasks
+                        if special:
+                            env["SPECIAL_COLORING"] = "1"
+                        env["INCLUDE_ADJ_MATRIX"] = "1"
+                        env["THINKING"] = thinking
+                        env["SCRAMBLE_IMAGE"] = "1"
+                        env["MODEL_PRETRAINED"] = m.pretrained
+                        if m.short == "internvl35_4b":
+                            env["MODEL_NAME_OVERRIDE"] = "vllm"
+                            env["INTERNVL_R1_VARIANT"] = "internvl_r1_v1"
+                        _write_conf(
+                            name=name,
+                            description=(
+                                f"Scrambled-image (no-image control) + {mode} + adjacency list: "
+                                f"{'coloring only (special-coloring)' if special else 'directed_connectivity + shortest_path'}, "
+                                f"n={THINK_ABLATION_N}/task, difficulty={diff} for {m.pretrained}"
+                            ),
+                            env=env,
+                        )
+                        bucket.append(name)
+        return think_j, nothink_j
+
+    scram_think, scram_nothink = _emit_scram(STANDARD_DIFFICULTIES)
+    batches["scram_ablation"] = scram_think + scram_nothink
+    # Early fast run: Qwen only, medium+hard. vm02 = coloring jobs (lighter),
+    # vm03 = conn+sp jobs (heavier, cover 2 tasks). Chunked so partial fetch works.
+    _q = "qwen35_4b"
+
+    def _early(jobs, coloring):
+        return [n for n in jobs
+                if n.endswith(f"_{_q}") and ("_medium_" in n or "_hard_" in n)
+                and (("_coloring_" in n) == coloring)]
+
+    batches["scram_qwen_early_vm02"] = _early(scram_think, True)    # think coloring (running)
+    batches["scram_qwen_early_vm03"] = _early(scram_think, False)   # think conn+sp (running)
+    batches["scram_qwen_nothink_early_vm02"] = _early(scram_nothink, True)    # nothink coloring
+    batches["scram_qwen_nothink_early_vm03"] = _early(scram_nothink, False)   # nothink conn+sp
 
     # --- Combined difficulty-separated ablation batch -------------------------
     # labels(letters+none) + node-color, difficulty-separated, n=100/task, all

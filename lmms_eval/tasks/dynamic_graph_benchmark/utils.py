@@ -16,6 +16,7 @@ answer. This module:
 
 from __future__ import annotations
 
+import os
 import re
 from collections import defaultdict
 
@@ -60,9 +61,37 @@ def _normalize_answer(answer: str, task: str) -> str:
     return _normalize(answer, task)
 
 
+def _scramble_pixels(img, seed: int = 20260707):
+    """Deterministically permute every pixel of an RGB image.
+
+    Destroys all spatial structure (the graph is unrecognizable) while keeping
+    the exact dimensions and colour histogram — so the model still receives an
+    image of identical vision-token cost that carries no usable graph info.
+    Used by the "no-image (scrambled)" control ablation: if accuracy is
+    unchanged vs. the intact-image run, the image was not contributing.
+    """
+    import numpy as np
+    from PIL import Image
+
+    arr = np.asarray(img)
+    n = arr.shape[0] * arr.shape[1]
+    perm = np.random.default_rng(seed).permutation(n)
+    flat = arr.reshape(n, -1)
+    return Image.fromarray(flat[perm].reshape(arr.shape))
+
+
 def dynamic_graph_benchmark_doc_to_visual(doc):
+    # Image ablations (control conditions). Gated by env so a single conf toggles
+    # them without touching the dataset render, keeping graphs/prompts identical:
+    #   NO_IMAGE=1        -> drop the image entirely (true no-image ablation)
+    #   SCRAMBLE_IMAGE=1  -> pixel-shuffle the image (present but unrecognizable)
+    if os.environ.get("NO_IMAGE") == "1":
+        return []
     if doc.get("image") is not None:
-        return [doc["image"].convert("RGB")]
+        img = doc["image"].convert("RGB")
+        if os.environ.get("SCRAMBLE_IMAGE") == "1":
+            img = _scramble_pixels(img)
+        return [img]
     return []
 
 

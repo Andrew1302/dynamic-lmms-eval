@@ -52,6 +52,10 @@ set -euo pipefail
 : "${EDGE_STYLE:=straight}"
 : "${INCLUDE_ADJ_MATRIX:=0}"
 : "${SPECIAL_COLORING:=0}"
+# First sample index (standard mode). Default 0. Set >0 for an incremental run
+# that reuses an existing lower-N run (generation is prefix-stable — see
+# prepare's --start-index). NUM_SAMPLES then counts the *additional* samples.
+: "${START_INDEX:=0}"
 : "${DIFFICULTY_OVERRIDES:=}"
 : "${THINKING:=0}"
 : "${CONSTRAINT:=}"
@@ -338,7 +342,7 @@ _build_prepare_args() {
             args+=(--samples-per-value "$SAMPLES_PER_VALUE")
         fi
     else
-        args+=(--num-samples "$NUM_SAMPLES" --difficulty "$DIFFICULTY")
+        args+=(--num-samples "$NUM_SAMPLES" --difficulty "$DIFFICULTY" --start-index "$START_INDEX")
     fi
     printf '%s\n' "${args[@]}"
 }

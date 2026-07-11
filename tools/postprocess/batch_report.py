@@ -142,7 +142,23 @@ def _thinkadj_diff_prefixes() -> list[tuple[str, str, str]]:
     return out
 
 
-_AXIS_PREFIXES: list[tuple[str, str, str]] = _thinkadj_diff_prefixes() + _thinking_diff_prefixes() + _ablation_diff_prefixes() + [
+def _scram_diff_prefixes() -> list[tuple[str, str, str]]:
+    """Scrambled-image (no-image control) + thinking + adjacency-list prefixes.
+
+    Jobs are ``graph_bench_scram_think_{diff}_{model}`` (conn+shortest_path) and
+    ``graph_bench_scram_think_coloring_{diff}_{model}`` (special-coloring), think
+    arm only. axis="scram_img" keeps them distinct from the intact-image thinkadj
+    family so a report can put them side by side.
+    """
+    out: list[tuple[str, str, str]] = []
+    for arm in ("think", "nothink"):
+        for d in ("easy", "medium", "hard"):
+            out.append((f"graph_bench_scram_{arm}_coloring_{d}_", "scram_img", f"{arm}/coloring/{d}"))
+            out.append((f"graph_bench_scram_{arm}_{d}_", "scram_img", f"{arm}/{d}"))
+    return out
+
+
+_AXIS_PREFIXES: list[tuple[str, str, str]] = _scram_diff_prefixes() + _thinkadj_diff_prefixes() + _thinking_diff_prefixes() + _ablation_diff_prefixes() + [
     # (prefix, axis, axis_value)
     # Difficulty-separated standard runs — most specific first so the difficulty
     # lands in axis_value and model_short stays just the model.
