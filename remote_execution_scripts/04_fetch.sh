@@ -46,6 +46,7 @@ for path in "${RESULT_PATHS[@]}"; do
 done
 
 EXIT_CODE_FILE="$DEST/.run/exit_code"
+ec=""
 if [ -f "$EXIT_CODE_FILE" ]; then
     ec="$(cat "$EXIT_CODE_FILE")"
     if [ "$ec" = "0" ]; then
@@ -55,4 +56,21 @@ if [ -f "$EXIT_CODE_FILE" ]; then
     fi
 else
     warn "no exit sentinel found — job may still be running (used --force?)"
+fi
+
+# Auto-file the just-fetched run into the numbered campaign tree
+# (NN_campaign/<task>/<original|disguise>/<leaf>.jsonl). Only on a clean,
+# complete fetch — a --force mid-run snapshot is left flat so a partial run
+# isn't prematurely organized. Idempotent; safe to re-run manually:
+#   python tools/postprocess/organize_results.py --root "$LOCAL_RESULTS_DIR" --apply
+if [ "$FORCE" -eq 0 ] && [ "$ec" = "0" ]; then
+    ORG="$REPO_ROOT/tools/postprocess/organize_results.py"
+    PY="$(command -v python || command -v python3 || true)"
+    if [ -n "$PY" ] && [ -f "$ORG" ]; then
+        log "organizing → numbered campaign tree"
+        "$PY" "$ORG" --root "$LOCAL_RESULTS_DIR" --apply --quiet \
+            || warn "organize step failed — results fetched OK; run organize_results.py manually"
+    else
+        warn "python/organizer not found — results left flat; run organize_results.py to file them"
+    fi
 fi

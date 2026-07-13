@@ -127,6 +127,12 @@ def parse_args() -> argparse.Namespace:
                              "each consecutive coloring sample cycles 2→3→4, so the answer "
                              "distribution is uniform over the three values. No effect on "
                              "other tasks or in sweep mode.")
+    parser.add_argument("--no-validate-images", action="store_true",
+                        help="Skip the post-generation image-integrity check. By default "
+                             "(standard mode) a sample of rows — including the first render "
+                             "of every task/variant — is re-rendered deterministically and "
+                             "pixel-compared to the stored image, aborting if any diverge "
+                             "(guards the storage-layer image-corruption class).")
 
     # Sweep mode
     parser.add_argument("--constraint", choices=["nodes", "edges"], default=None,
@@ -448,6 +454,10 @@ def main() -> None:
         cache_dir=str(cache_dir),
         writer_batch_size=200,
     )
+    # Integrity gate: catch storage-layer image corruption before anything ships
+    # (the chunks the eval reads and the exported PNGs both derive from this ds).
+    if args.constraint is None and not args.no_validate_images:
+        _validate_stored_images(ds, args, cfg, task_names, benchmark)
     dataset_dict = DatasetDict({"test": ds})
 
     # Wipe stale shards from previous runs — save_to_disk overwrites the
@@ -480,6 +490,86 @@ def main() -> None:
     (output_dir / _META_FILENAME).write_text(
         json.dumps(fp_new, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+
+
+def _validate_stored_images(ds, args, cfg, task_names, mod) -> None:
+    """Re-render a sample of rows and pixel-compare to the images stored in the
+    freshly built dataset; abort on any divergence.
+
+    Guards the storage-layer image-corruption class observed once in the wild:
+    a coloring sample-0 row whose stored ``image`` held a foreign default
+    -triangulation graph while its prompt/adjacency/answer were correct. Because
+    generation is deterministic in (seed, difficulty, target_chromatic), a
+    same-run re-render is pixel-identical to a correctly-stored image — so any
+    mismatch means the write, not the render, produced a bad cell. Pixel
+    comparison (not byte/md5) is used so it is immune to any PNG re-encoding by
+    the HF Image() feature.
+
+    Standard mode only — sweep rows need node/edge params that aren't
+    reconstructable from the stored row. Per-row re-render errors are warned and
+    skipped (never abort); only a genuine pixel mismatch aborts.
+    """
+    import re as _re
+
+    import numpy as _np
+
+    ids = ds["id"]
+    id_to_idx = {v: i for i, v in enumerate(ids)}
+    n = len(ds)
+    picks: list[int] = []
+    seen: set[int] = set()
+
+    def _add(idx: int | None) -> None:
+        if idx is not None and 0 <= idx < n and idx not in seen:
+            seen.add(idx)
+            picks.append(idx)
+
+    # The first render of each (task, variant) is the highest-risk cell — that is
+    # exactly where the known corruption landed. Plus a few spread rows.
+    for t in task_names:
+        for off in (0, 1):
+            for variant in ("direct", "disguise"):
+                _add(id_to_idx.get(f"{t}_{variant}_{args.start_index + off:06d}"))
+    for idx in (n // 4, n // 2, (3 * n) // 4, n - 2):
+        _add(idx)
+
+    mismatches: list[tuple[int, str]] = []
+    checked = 0
+    for idx in picks:
+        row = ds[idx]
+        m = _re.match(r"^(?P<task>.+)_(?P<variant>direct|disguise)_(?P<i>\d+)$", str(row["id"]))
+        if not m or m.group("task") not in task_names:
+            continue
+        task_name, variant, i = m.group("task"), m.group("variant"), int(m.group("i"))
+        tc = 2 + (i % 3) if (args.special_coloring and task_name == "coloring") else None
+        try:
+            s = mod.get_all_tasks()[task_name]().generate(
+                seed=int(row["seed"]),
+                difficulty=str(row["difficulty"]),
+                config=cfg,
+                include_adjacency_list=args.include_adjacency_matrix,
+                target_chromatic=tc,
+            )
+            fresh = _np.asarray(s[f"{variant}_image"].convert("RGB"))
+            stored = _np.asarray(row["image"].convert("RGB"))
+        except Exception as exc:  # a re-render problem is not a data mismatch
+            print(f"[prepare_dynamic_graph_benchmark] WARNING: could not validate "
+                  f"row {idx} ({row['id']}): {exc}")
+            continue
+        checked += 1
+        if fresh.shape != stored.shape or not _np.array_equal(fresh, stored):
+            mismatches.append((idx, str(row["id"])))
+
+    if mismatches:
+        raise RuntimeError(
+            "[prepare_dynamic_graph_benchmark] IMAGE VALIDATION FAILED — the stored image "
+            f"differs from a fresh deterministic re-render for {len(mismatches)}/{checked} "
+            f"sampled row(s): {mismatches[:12]}. This is the storage-layer image-corruption "
+            "class (e.g. the coloring sample-0 foreign image). Aborting before save so no "
+            "corrupt dataset ships — re-run prepare (generation is deterministic)."
+        )
+    print(f"[prepare_dynamic_graph_benchmark] image validation OK — {checked} sampled "
+          "rows re-rendered pixel-identical to storage")
 
 
 def _interleave_pair_indices_by_task(ds) -> list[int]:

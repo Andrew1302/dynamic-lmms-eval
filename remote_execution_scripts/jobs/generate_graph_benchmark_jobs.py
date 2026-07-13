@@ -18,12 +18,27 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import sys
 import textwrap
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
 _OUT_DIR = _HERE / "graph_benchmark"
 _BATCH_DIR = _HERE.parent / "batches"
+_REPO_ROOT = _HERE.parent.parent
+
+# Single source of truth for the job-name -> NN_campaign mapping. The same
+# classifier files fetched results into the numbered tree (tools/postprocess/
+# organize_results.py), so a job's CAMPAIGN stamp here and where 04_fetch.sh
+# ultimately places it can never drift. Adding a new ablation family means
+# adding one SPEC entry there; the drift check at the end of main() flags any
+# job that isn't covered.
+sys.path.insert(0, str(_REPO_ROOT / "tools" / "postprocess"))
+from organize_results import (  # noqa: E402
+    campaign_for_name,
+    SCRATCH_RE,
+    CAMPAIGN_DESC,
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -167,6 +182,12 @@ def _write_conf(
     # via 01_deploy.sh / 02_run.sh / run_eval.sh's env contract).
     lines.append(f'JOB_NAME="{name}"\n')
     lines.append(f'DATASET_DIR="./dataset_{name}"\n')
+    # Provenance: which numbered campaign this job belongs to. 04_fetch.sh files
+    # the fetched run under this campaign in remote_results/. Empty for
+    # smoke/experimental jobs (they land in _scratch/).
+    campaign = campaign_for_name(name)
+    if campaign:
+        lines.append(f'export CAMPAIGN="{campaign}"\n')
     for k, v in env.items():
         lines.append(f'export {k}="{v}"\n')
     lines.append("export DATASET_DIR\n")
@@ -731,6 +752,28 @@ def main() -> None:
         f"\nWrote {total} conf files under {_OUT_DIR}/ and "
         f"{len(batches)} batch manifests under {_BATCH_DIR}/."
     )
+
+    # Drift guard: every emitted job must resolve to a campaign or be an
+    # explicit smoke/experimental job (-> _scratch). Anything else means a new
+    # family was added without a matching SPEC in organize_results.py, so its
+    # fetched results would sit unfiled. Report the numbered layout + flag gaps.
+    all_names = sorted({n for names in batches.values() for n in names})
+    by_campaign: dict[str, int] = {}
+    unclassified: list[str] = []
+    for n in all_names:
+        camp = campaign_for_name(n)
+        if camp:
+            by_campaign[camp] = by_campaign.get(camp, 0) + 1
+        elif not SCRATCH_RE.search(n):
+            unclassified.append(n)
+    print("\nCampaign layout (job-name -> remote_results/NN_campaign):")
+    for camp in sorted(CAMPAIGN_DESC):
+        print(f"  {camp:18s} {by_campaign.get(camp, 0):3d} jobs")
+    if unclassified:
+        print("\n!! UNCLASSIFIED jobs (add a SPEC to tools/postprocess/"
+              "organize_results.py so fetches file them):")
+        for n in unclassified:
+            print(f"     {n}")
 
 
 if __name__ == "__main__":

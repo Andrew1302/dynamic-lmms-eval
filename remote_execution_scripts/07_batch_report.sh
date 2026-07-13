@@ -108,7 +108,7 @@ for j in "${JOBS[@]}"; do
         else
             pairs_joined=""
         fi
-        results_dir="$(local_results_dir "$JOB_NAME")"
+        results_dir="$(job_data_dir "$JOB_NAME")"
         constraint="${CONSTRAINT:-}"
         printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
             "$j" "$JOB_NAME" "$results_dir" "$MODEL_PRETRAINED" "$pairs_joined" "$constraint"

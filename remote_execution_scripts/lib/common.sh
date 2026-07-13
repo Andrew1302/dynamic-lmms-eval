@@ -132,6 +132,21 @@ remote_log_path() { echo "${REMOTE_RUNS_DIR}/${1}/run.log"; }
 remote_run_dir()  { echo "${REMOTE_RUNS_DIR}/${1}"; }
 local_results_dir() { echo "${LOCAL_RESULTS_DIR}/${1}"; }
 
+# Where a fetched job's data actually LIVES for reading (reporting, analysis).
+# 04_fetch.sh always writes flat to local_results_dir, then organize_results.py
+# files it under remote_results/NN_campaign/_jobs/<job>/. So: prefer a still-flat
+# copy (fresh/--force snapshot mid-organize), else the filed _jobs/ location,
+# else fall back to the flat path (lets callers emit a clean NO_DATA).
+job_data_dir() {
+    local job="$1"
+    local flat="${LOCAL_RESULTS_DIR}/${job}"
+    if [ -d "$flat" ]; then echo "$flat"; return; fi
+    local filed
+    filed="$(ls -d "${LOCAL_RESULTS_DIR}"/*/_jobs/"${job}" 2>/dev/null | head -1)"
+    if [ -n "$filed" ]; then echo "$filed"; return; fi
+    echo "$flat"
+}
+
 # --- bootstrapping -----------------------------------------------------------
 # Every top-level script sources this, then sources config.sh.
 # $REPO_ROOT is set before sourcing so load_job can find jobs/.
