@@ -90,13 +90,13 @@ VARIANT_FOLDER = {"direct": "original", "disguise": "disguise"}
 CAMPAIGN_DESC = {
     "01_standard": "Baseline benchmark, n=500/task, 3 difficulties x 3 models. All three tasks, original + disguise.",
     "02_sweep_size": "Graph-size scaling sweeps (edges & nodes; *_chi = special-coloring sweep). Difficulty replaced by the swept size; leaf = <model>_<constraint>.",
-    "03_coloring_chi": "Coloring re-run with planted chromatic number chi in {2,3,4}, n=500/task, 3 difficulties x 3 models.",
+    "03_coloring_chi": "LEGACY (absorbed into 01_standard 2026-07-16: chi-controlled coloring is now the prepare default, so coloring rides in every base job). Kept to file archived results.",
     "04_abl_adjlist": "Adjacency list injected into the prompt. n=100/task, 3 difficulties x 3 models.",
     "05_abl_labels": "Node-label style ablation (letters / none vs the numeric baseline). n=100/task.",
     "06_abl_color": "Node fill-colour ablation. n=100/task, 3 difficulties x 3 models.",
     "07_abl_think": "Thinking on/off ablation (image-only prompt). Both arms, n=100/task.",
     "08_abl_thinkadj": "Thinking x adjacency-list ablation. Both arms. n=500 = base (n=100) pooled with _inc (n=400); InternVL base-only. leaf arm in {think,nothink}, _inc marks the 400-sample increment.",
-    "09_abl_scram": "Scrambled ('no-info') image control. Qwen only, both arms, medium+hard.",
+    "09_abl_scram": "Scrambled ('no-info') image control. Both arms; full grid is 3 difficulties x 3 models (early partial runs were Qwen-only medium+hard).",
 }
 
 SAMPLES_RE = re.compile(r"^(?P<ts>\d{8}_\d{6})_samples_(?P<task>.+)\.jsonl$")
@@ -198,13 +198,30 @@ def classify(job_dir: Path) -> JobPlan | None:
     return JobPlan(job_dir, bare, "", "", {}, scratch_reason="UNMATCHED")
 
 
+def _meta_special_coloring(job_dir: Path) -> bool:
+    """prepare_meta.json authority for merged-era jobs (2026-07-16+): chi-
+    controlled coloring became the prepare DEFAULT, so base all-task jobs now
+    emit special-chi coloring under the same names that used to emit
+    default-chi. The fetched dataset's meta (special_coloring: true/false)
+    is the only era-proof discriminator."""
+    for meta in job_dir.glob("dataset_*/prepare_meta.json"):
+        try:
+            return bool(json.loads(
+                meta.read_text(encoding="utf-8")).get("special_coloring"))
+        except (OSError, json.JSONDecodeError, AttributeError):
+            continue
+    return False
+
+
 def build_leaves(jp: JobPlan) -> None:
-    # Special-chi coloring is identified reliably from the job NAME: a dedicated
-    # coloring job carries the '_coloring_' marker (fields['col']), and every
-    # 03_coloring_chi job is special by construction. Base all-task jobs emit
-    # default-chi coloring. (run.log's 'special_coloring=' marker is missing on
-    # older runs, so name is authoritative.)
-    special = jp.fields.get("col") == "coloring" or jp.campaign == "03_coloring_chi"
+    # Special-chi coloring: a dedicated coloring job carries the '_coloring_'
+    # name marker (fields['col']) and every 03_coloring_chi job is special by
+    # construction — but since 2026-07-16 base all-task jobs are special too
+    # (chi-control is the prepare default), so fall back to the fetched
+    # dataset's prepare_meta.json when the name says nothing.
+    special = (jp.fields.get("col") == "coloring"
+               or jp.campaign == "03_coloring_chi"
+               or _meta_special_coloring(jp.job_dir))
     for (base, variant), src in authoritative_jsonls(jp.job_dir).items():
         tf = TASK_FOLDER.get(base)
         vf = VARIANT_FOLDER.get(variant)
@@ -407,7 +424,8 @@ def _link_one_job(camp_dir: Path, job_dir: Path) -> int:
         return 0
     campaign, tmpl, fields = m
     leaf = tmpl.format(**fields)
-    special = fields.get("col") == "coloring" or campaign == "03_coloring_chi"
+    special = (fields.get("col") == "coloring" or campaign == "03_coloring_chi"
+               or _meta_special_coloring(job_dir))
     has_default = (camp_dir / "coloring_default").exists()
     made = 0
     for png in job_dir.rglob("*.png"):

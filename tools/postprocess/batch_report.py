@@ -174,6 +174,11 @@ _AXIS_PREFIXES: list[tuple[str, str, str]] = _scram_diff_prefixes() + _thinkadj_
     ("graph_bench_ablation_labels_letters_", "labels",       "letters"),
     ("graph_bench_ablation_labels_none_",    "labels",       "none"),
     ("graph_bench_ablation_color_",          "color",        ""),
+    # Adjacency-list ablation, difficulty-separated like standard.
+    ("graph_bench_ablation_adjlist_easy_",   "adjlist",      "easy"),
+    ("graph_bench_ablation_adjlist_medium_", "adjlist",      "medium"),
+    ("graph_bench_ablation_adjlist_hard_",   "adjlist",      "hard"),
+    ("graph_bench_ablation_adjlist_",        "adjlist",      ""),
     ("graph_bench_ablation_adjmatrix_",      "adjmatrix",    ""),
     ("graph_bench_ablation_thinking_",       "thinking",     ""),
     ("graph_bench_ablation_size_",           "model_size",   ""),

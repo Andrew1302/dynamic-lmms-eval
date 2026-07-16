@@ -80,16 +80,17 @@ def _range_for(job: str, want_task: str) -> list[int] | None:
 
 
 def _sizes() -> dict[tuple[str, str], list[int]]:
-    """(task, difficulty) -> range. coloring from the *_coloring_* jobs;
-    directed_connectivity + shortest_path from the conn+sp jobs."""
+    """(task, difficulty) -> range. All three tasks live in the base job
+    (merged layout, 2026-07-16); falls back to the legacy separate
+    *_coloring_* job for coloring when reading pre-merge fetches."""
     out: dict[tuple[str, str], list[int]] = {}
     for diff in DIFFICULTIES:
-        crange = _range_for(f"{JOB_BASE}_coloring_{diff}_{RANGE_MODEL}", "coloring")
-        if crange:
-            out[("coloring", diff)] = crange
-        cs_job = f"{JOB_BASE}_{diff}_{RANGE_MODEL}"
-        for task in ("directed_connectivity", "shortest_path"):
-            rng = _range_for(cs_job, task)
+        job = f"{JOB_BASE}_{diff}_{RANGE_MODEL}"
+        for task in TASKS:
+            rng = _range_for(job, task)
+            if rng is None and task == "coloring":
+                rng = _range_for(
+                    f"{JOB_BASE}_coloring_{diff}_{RANGE_MODEL}", "coloring")
             if rng:
                 out[(task, diff)] = rng
     return out

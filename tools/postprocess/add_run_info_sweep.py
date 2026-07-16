@@ -129,8 +129,12 @@ def _config_rows(axis: str) -> list[tuple[str, str]]:
 
 def build_run_info(axis: str, wb: openpyxl.Workbook) -> None:
     a = AXES[axis]
-    # coloring ranges from a coloring-special run; dc/sp from the qwen full sweep
-    color = _ranges(f"graph_bench_sweep_{axis}_coloring_internvl35_4b", {"coloring"})
+    # coloring ranges from the merged base sweep (χ-controlled by default since
+    # 2026-07-16); falls back to the legacy separate coloring-special run when
+    # reading pre-merge fetches. dc/sp from the qwen full sweep.
+    color = (_ranges(f"graph_bench_sweep_{axis}_qwen35_4b", {"coloring"})
+             or _ranges(f"graph_bench_sweep_{axis}_coloring_internvl35_4b",
+                        {"coloring"}))
     dcsp = _ranges(
         f"graph_bench_sweep_{axis}_qwen35_4b",
         {"directed_connectivity", "shortest_path"},
