@@ -33,25 +33,61 @@ _LAST_INT_TASKS = {"shortest_path"}
 _YES_PATTERNS = {"yes", "y", "true", "t"}
 _NO_PATTERNS = {"no", "n", "false", "f"}
 
+# Models (InternVL3.5 especially) echo the prompt's answer cue, producing
+# "A: Yes" / "Answer: 4". The first-token rule read that as "a" and scored a
+# correct answer 0 — 66 connectivity think-arm answers in the thinkadj n=100
+# run alone. Strip the cue before token rules.
+_ANSWER_PREFIX_RE = re.compile(r"^\s*(?:a|answer|final answer)\s*[:\-]\s*", re.IGNORECASE)
+
+# Verbose worked solutions bury the answer mid-prose where neither first- nor
+# last-integer is reliable (node ids, color-class listings, edge weights all
+# emit integers). An explicit final-answer statement ("the chromatic number
+# is 4", "answer: 14", "\boxed{3}") is; take the LAST such statement — the
+# model's standing claim. The copula (is|=|:|{) is required so question echoes
+# ("path total from vertex 0") don't match. Benchmarked on all thinkadj
+# jsonls: coloring +160/-20 vs first-int, shortest_path ±2, connectivity
+# +66/-0 (with the prefix strip + unique-word fallback below).
+_FINAL_STMT_RE = re.compile(
+    r"(?:final answer|answer|chromatic number(?: of the graph)?"
+    r"|minimum number of colors(?: needed| required)?"
+    r"|\bchi\b(?:\(g\))?|boxed"
+    r"|minimum total driving time|minimum[- ]weight path total)"
+    r"[^.\d\n]{0,20}?(?:is|=|:|\{)\s*\**\s*(-?\d+)",
+    re.IGNORECASE,
+)
+
 
 def _normalize(prediction: str, task: str) -> str:
-    pred = (prediction or "").strip()
+    pred = _ANSWER_PREFIX_RE.sub("", (prediction or "").strip())
 
     if task in _YESNO_TASKS:
         first = pred.lower().split()
-        if not first:
-            return ""
-        token = re.sub(r"[^a-z]", "", first[0])
+        token = re.sub(r"[^a-z]", "", first[0]) if first else ""
         if token in _YES_PATTERNS:
             return "yes"
         if token in _NO_PATTERNS:
             return "no"
+        # Short answers whose first token is noise ("*? No.") but that contain
+        # exactly one yes/no word are unambiguous. Length-capped so long
+        # reasoning prose can't flip on an incidental "yes".
+        if len(pred) <= 120:
+            words = set(re.findall(r"\b(yes|no)\b", pred.lower()))
+            if len(words) == 1:
+                return words.pop()
         return token
 
     if task in _INTEGER_TASKS:
         ints = re.findall(r"-?\d+", pred)
         if not ints:
             return pred.lower()
+        if len(ints) == 1:
+            return ints[0]
+        stmts = list(_FINAL_STMT_RE.finditer(pred))
+        if stmts:
+            return stmts[-1].group(1)
+        last_line_ints = re.findall(r"-?\d+", pred.strip().splitlines()[-1])
+        if len(last_line_ints) == 1:
+            return last_line_ints[0]
         return ints[-1] if task in _LAST_INT_TASKS else ints[0]
 
     return pred.lower()
