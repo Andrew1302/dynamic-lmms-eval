@@ -200,6 +200,12 @@ lmms-eval = "lmms_eval.cli.dispatch:main"
 lmms-eval-mcp = "lmms_eval.mcp:main"
 lmms-eval-ui = "lmms_eval.tui.cli:main"
 
+# Loaded by vLLM in EVERY process (incl. the spawned v1 engine core). Gated by
+# the FP8_KEEP_BF16_PATTERNS env var — no-op unless run_eval.sh sets it for the
+# fp8-quantized VLM runs (fp8 vision-blindness fix, see lmms_eval/vllm_plugins.py).
+[project.entry-points."vllm.general_plugins"]
+lmms_fp8_keep_bf16 = "lmms_eval.vllm_plugins:fp8_keep_bf16"
+
 [project.urls]
 Homepage = "https://lmms-lab.github.io"
 Repository = "https://github.com/EvolvingLMMs-Lab/lmms-eval"
