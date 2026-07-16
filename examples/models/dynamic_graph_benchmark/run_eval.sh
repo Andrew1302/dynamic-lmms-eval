@@ -171,6 +171,17 @@ case "$MODEL_PRETRAINED" in
         VLLM_MAX_MODEL_LEN=16384
         VLLM_MAX_NUM_SEQS=2
         VLLM_QUANT=",quantization=fp8"
+        # Think arm with force-close (INTERNVL_FORCE_CLOSE=1, default): mirror
+        # Qwen's budget scheme (12288 think + 1024 answer = 13312 gen), which
+        # needs the same widened 20480 window so prompt + generation fit.
+        if [ "$THINKING" = "1" ] && [ "${INTERNVL_FORCE_CLOSE:-1}" = "1" ]; then
+            VLLM_MAX_MODEL_LEN=20480
+        fi
+        # fp8 vision-blindness fix: vllm online fp8 quantizes the ViT too and
+        # destroys the percept (probe-verified 2026-07-14; memory
+        # fp8-vision-blindness). Keep vision modules bf16 via the
+        # lmms_eval.vllm_plugins entry point; LM stays fp8 (campaign-identical).
+        export FP8_KEEP_BF16_PATTERNS="vision_model.,mlp1"
         export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
         ;;
     *Qwen3.5*)
@@ -187,6 +198,9 @@ case "$MODEL_PRETRAINED" in
         # 6 keeps well within that headroom while ~3x the throughput of 2.
         VLLM_MAX_NUM_SEQS=6
         VLLM_QUANT=",quantization=fp8"
+        # fp8 vision-blindness fix (same as InternVL above): Qwen3.5's vision
+        # tower lives under the "visual." prefix.
+        export FP8_KEEP_BF16_PATTERNS="visual."
         # Think arm uses a native thinking-token budget (12288) + 1024 answer
         # allowance = 13312 total; widen the window to 20480 so that plus the
         # image prompt fits (still ≤ the ~31k KV pool, so it loads).
@@ -234,6 +248,14 @@ VLLM_REASONING=""
 case "$MODEL_PRETRAINED" in
     *Qwen3.5*)
         [ "$THINKING" = "1" ] && VLLM_REASONING=",reasoning_parser=qwen3" ;;
+    *InternVL3*|*internvl3*)
+        # InternVL3.5's LM is Qwen3, so its tokenizer has the <think>/</think>
+        # delimiters and vllm's qwen3 reasoning parser applies. This enables the
+        # same native thinking-token force-close as Qwen — the fix for the
+        # rumination-truncation tail (12k-token unclosed <think> blocks whose
+        # reasoning CONTAINS the right answer but never emits it; see memory
+        # fp8-vision-blindness). INTERNVL_FORCE_CLOSE=0 opts out.
+        [ "$THINKING" = "1" ] && [ "${INTERNVL_FORCE_CLOSE:-1}" = "1" ] && VLLM_REASONING=",reasoning_parser=qwen3" ;;
 esac
 
 # Per-family thinking arg for the vllm path. InternVL3.5 has no enable_thinking
@@ -246,7 +268,7 @@ case "$MODEL_PRETRAINED" in
         # internvl_r1_v2 | _v3 | _v4) for prompt-tuning experiments; default is
         # the committed internvl_r1.
         VLLM_MODEL_THINK=""
-        [ "$THINKING" = "1" ] && VLLM_MODEL_THINK=",system_prompt=${INTERNVL_R1_VARIANT:-internvl_r1}"
+        [ "$THINKING" = "1" ] && VLLM_MODEL_THINK=",system_prompt=${INTERNVL_R1_VARIANT:-internvl_r1}${VLLM_REASONING}"
         ;;
     *)
         VLLM_MODEL_THINK="${VLLM_THINK}${VLLM_SKIP_SPECIAL}${VLLM_TERSE}${VLLM_REASONING}"
@@ -408,8 +430,15 @@ if [ "$THINKING" = "1" ]; then
     THINK_TOKEN_BUDGET=""   # native vllm thinking-token budget (Qwen only); "" = off
     case "$MODEL_PRETRAINED" in
         # InternVL runs fp8 with a 16k window (see memory tuning), so give its
-        # verbose R1 reasoning a generous budget that rarely truncates.
-        *InternVL3*|*internvl3*) THINK_MAXTOK=12288 ;;
+        # verbose R1 reasoning a generous budget that rarely truncates. With
+        # force-close (default) it mirrors Qwen exactly: 12288 thinking tokens
+        # hard-closed by </think>, then the 1024 answer allowance.
+        *InternVL3*|*internvl3*)
+            if [ "${INTERNVL_FORCE_CLOSE:-1}" = "1" ]; then
+                THINK_TOKEN_BUDGET=12288; THINK_MAXTOK=$((12288 + ANSWER_BUDGET))
+            else
+                THINK_MAXTOK=12288
+            fi ;;
         # Gemma mostly commits within 4096, but coloring-hard over-deliberates:
         # ~14% hit the 4096 cap. Its sliding-window attention makes a wider
         # window cheap, so give it the same 12288 budget as InternVL (fits the
