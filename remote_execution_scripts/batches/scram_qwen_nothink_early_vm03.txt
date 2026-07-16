@@ -1,2 +1,0 @@
-graph_benchmark/graph_bench_scram_nothink_medium_qwen35_4b
-graph_benchmark/graph_bench_scram_nothink_hard_qwen35_4b

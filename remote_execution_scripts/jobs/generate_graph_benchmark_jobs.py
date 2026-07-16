@@ -245,88 +245,42 @@ def main() -> None:
             )
             batches["standard"].append(name)
 
-    # --- Coloring re-run: special-coloring, difficulty-separated, n=500 -------
-    # The default coloring graphs (full Delaunay triangulation) have a chromatic
-    # number that concentrates on 3-4, so the answer is nearly constant and the
-    # signal is weak/guessable. SPECIAL_COLORING plants χ uniformly across
-    # {2,3,4} (linear 2→3→4 per sample). One job per (difficulty, model),
-    # coloring task only, n=500/task — mirrors the standard layout so the
-    # easy→medium→hard gradient is preserved.
-    batches["coloring"] = []
-    for diff in STANDARD_DIFFICULTIES:
-        for m in MODELS_4B:
-            name = f"graph_bench_coloring_{diff}_{m.short}"
-            env = _standard_env(STANDARD_DIFF_N, CHUNK_STANDARD)
-            env["DIFFICULTY"] = diff
-            env.pop("DIFFICULTY_OVERRIDES", None)
-            env["TASKS"] = "coloring"
-            env["SPECIAL_COLORING"] = "1"
-            env["MODEL_PRETRAINED"] = m.pretrained
-            _write_conf(
-                name=name,
-                description=(
-                    f"Coloring re-run (special-coloring χ∈{{2,3,4}} uniform, "
-                    f"n={STANDARD_DIFF_N}/task, difficulty={diff}) for {m.pretrained}"
-                ),
-                env=env,
-            )
-            batches["coloring"].append(name)
+    # NOTE (2026-07-16): χ-controlled coloring (uniform {2,3,4}, linear 2→3→4)
+    # is now the prepare tool's UNCONDITIONAL behavior, so the old separate
+    # `*_coloring_*` SPECIAL_COLORING jobs are gone: coloring rides in every
+    # base job's TASKS alongside conn+shortest_path. The old 03_coloring_chi
+    # campaign is absorbed into 01_standard. This halves the job count per
+    # ablation family.
 
     # --- Label-style ablation: letters + none, difficulty-separated, n=100 ----
-    # One job per (style, difficulty, model). Because --special-coloring yields a
-    # coloring-ONLY dataset, coloring is split into its own SPECIAL_COLORING job
-    # (χ∈{2,3,4} linear 2→3→4) while directed_connectivity + shortest_path share
-    # a job. Together the two jobs cover all three tasks per (style, diff, model)
-    # at n=ABLATION_DIFF_N/task. Mirrors the standard/coloring difficulty layout
-    # so the report keeps a clean easy→medium→hard gradient per model.
+    # One job per (style, difficulty, model), all three tasks (coloring is
+    # χ-controlled by default). Mirrors the standard difficulty layout so the
+    # report keeps a clean easy→medium→hard gradient per model.
     batches["ablation_labels"] = []
     batches["ablation_labels_letters"] = []
     batches["ablation_labels_none"] = []
     for style in ("letters", "none"):
         for diff in STANDARD_DIFFICULTIES:
             for m in MODELS_4B:
-                # directed_connectivity + shortest_path (default coloring absent)
                 name = f"graph_bench_ablation_labels_{style}_{diff}_{m.short}"
                 env = _standard_env(ABLATION_DIFF_N, CHUNK_ABLATION)
                 env["DIFFICULTY"] = diff
                 env.pop("DIFFICULTY_OVERRIDES", None)
-                env["TASKS"] = "directed_connectivity shortest_path"
                 env["LABEL_STYLE"] = style
                 env["MODEL_PRETRAINED"] = m.pretrained
                 _write_conf(
                     name=name,
                     description=(
-                        f"Ablation: label_style={style}, conn+shortest_path "
+                        f"Ablation: label_style={style}, all tasks "
                         f"(n={ABLATION_DIFF_N}/task, difficulty={diff}) for {m.pretrained}"
                     ),
                     env=env,
                 )
                 batches["ablation_labels"].append(name)
                 batches[f"ablation_labels_{style}"].append(name)
-                # coloring only, balanced χ∈{2,3,4} (special coloring)
-                cname = f"graph_bench_ablation_labels_{style}_coloring_{diff}_{m.short}"
-                cenv = _standard_env(ABLATION_DIFF_N, CHUNK_ABLATION)
-                cenv["DIFFICULTY"] = diff
-                cenv.pop("DIFFICULTY_OVERRIDES", None)
-                cenv["TASKS"] = "coloring"
-                cenv["SPECIAL_COLORING"] = "1"
-                cenv["LABEL_STYLE"] = style
-                cenv["MODEL_PRETRAINED"] = m.pretrained
-                _write_conf(
-                    name=cname,
-                    description=(
-                        f"Ablation: label_style={style}, coloring only with "
-                        f"balanced χ∈{{2,3,4}} (special-coloring), "
-                        f"n={ABLATION_DIFF_N}/task, difficulty={diff}) for {m.pretrained}"
-                    ),
-                    env=cenv,
-                )
-                batches["ablation_labels"].append(cname)
-                batches[f"ablation_labels_{style}"].append(cname)
 
     # --- Node-color ablation: alt color, difficulty-separated, n=100 ----------
-    # Same split as the label ablation: conn+shortest_path in one job, coloring
-    # (special, χ∈{2,3,4} linear) in another, per (difficulty, model).
+    # One job per (difficulty, model), all three tasks.
     batches["ablation_color"] = []
     alt_color = "#F1948A"
     for diff in STANDARD_DIFFICULTIES:
@@ -335,36 +289,17 @@ def main() -> None:
             env = _standard_env(ABLATION_DIFF_N, CHUNK_ABLATION)
             env["DIFFICULTY"] = diff
             env.pop("DIFFICULTY_OVERRIDES", None)
-            env["TASKS"] = "directed_connectivity shortest_path"
             env["NODE_COLOR"] = alt_color
             env["MODEL_PRETRAINED"] = m.pretrained
             _write_conf(
                 name=name,
                 description=(
-                    f"Ablation: node_color={alt_color}, conn+shortest_path "
+                    f"Ablation: node_color={alt_color}, all tasks "
                     f"(n={ABLATION_DIFF_N}/task, difficulty={diff}) for {m.pretrained}"
                 ),
                 env=env,
             )
             batches["ablation_color"].append(name)
-            cname = f"graph_bench_ablation_color_coloring_{diff}_{m.short}"
-            cenv = _standard_env(ABLATION_DIFF_N, CHUNK_ABLATION)
-            cenv["DIFFICULTY"] = diff
-            cenv.pop("DIFFICULTY_OVERRIDES", None)
-            cenv["TASKS"] = "coloring"
-            cenv["SPECIAL_COLORING"] = "1"
-            cenv["NODE_COLOR"] = alt_color
-            cenv["MODEL_PRETRAINED"] = m.pretrained
-            _write_conf(
-                name=cname,
-                description=(
-                    f"Ablation: node_color={alt_color}, coloring only with "
-                    f"balanced χ∈{{2,3,4}} (special-coloring), "
-                    f"n={ABLATION_DIFF_N}/task, difficulty={diff}) for {m.pretrained}"
-                ),
-                env=cenv,
-            )
-            batches["ablation_color"].append(cname)
 
     # --- Adjacency-list ablation: difficulty-separated, n=100/task, 4B panel --
     # One job per (difficulty, model): graph_bench_ablation_adjlist_<diff>_<m>.
@@ -390,36 +325,6 @@ def main() -> None:
                 env=env,
             )
             batches["ablation_adjlist"].append(name)
-
-    # --- Adjacency-list COLORING re-run: special-coloring + adj list ----------
-    # The adjacency-list ablation's coloring task MUST use SPECIAL_COLORING:
-    # default coloring graphs (full Delaunay) have χ concentrated on 3-4, so the
-    # answer is nearly constant and accuracy is dominated by guessing. This batch
-    # plants χ uniformly across {2,3,4} (linear 2→3→4) while also injecting the
-    # adjacency list into the prompt, so the coloring column of the adj-list
-    # ablation is meaningful. Coloring task only; the conn/shortest_path adj-list
-    # results live in the `ablation_adjlist` batch.
-    batches["ablation_adjlist_coloring"] = []
-    for diff in STANDARD_DIFFICULTIES:
-        for m in MODELS_4B:
-            name = f"graph_bench_ablation_adjlist_coloring_{diff}_{m.short}"
-            env = _standard_env(ADJLIST_DIFF_N, CHUNK_ABLATION)
-            env["DIFFICULTY"] = diff
-            env.pop("DIFFICULTY_OVERRIDES", None)
-            env["TASKS"] = "coloring"
-            env["SPECIAL_COLORING"] = "1"
-            env["INCLUDE_ADJ_MATRIX"] = "1"
-            env["MODEL_PRETRAINED"] = m.pretrained
-            _write_conf(
-                name=name,
-                description=(
-                    f"Ablation: adjacency list + special-coloring (χ∈{{2,3,4}} "
-                    f"uniform), coloring only, n={ADJLIST_DIFF_N}/task, "
-                    f"difficulty={diff}) for {m.pretrained}"
-                ),
-                env=env,
-            )
-            batches["ablation_adjlist_coloring"].append(name)
 
     # --- Sweep over nodes: 4B panel, 250 samples per value --------------------
     batches["sweep_nodes"] = []
@@ -458,48 +363,12 @@ def main() -> None:
         )
         batches["sweep_edges"].append(name)
 
-    # --- Coloring-only sweeps with balanced χ∈{2,3,4} (special coloring) -------
-    # The plain sweeps above run all three tasks; their coloring slice uses the
-    # default full-triangulation graphs whose chromatic number concentrates on
-    # 3-4 (weak, guessable signal). These re-run the node/edge sweeps for the
-    # coloring task ALONE with SPECIAL_COLORING, which plants χ linearly across
-    # {2,3,4} per constraint-value bucket (clamped to ≤ node_count on the node
-    # axis — a graph can't require more colors than it has nodes). One job per
-    # (axis, model). Named graph_bench_sweep_<axis>_coloring_<model> so the
-    # batch-report axis parser still classifies them as sweeps.
-    for axis, values, spv in (
-        ("nodes", SWEEP_NODE_VALUES, SWEEP_NODE_SPV),
-        ("edges", SWEEP_EDGE_VALUES, SWEEP_EDGE_SPV),
-    ):
-        batch = f"sweep_{axis}_coloring"
-        batches[batch] = []
-        for m in MODELS_4B:
-            name = f"graph_bench_sweep_{axis}_coloring_{m.short}"
-            env = _standard_env(ABLATION_N, CHUNK_SWEEP)
-            env["TASKS"] = "coloring"
-            env["SPECIAL_COLORING"] = "1"
-            env["MODEL_PRETRAINED"] = m.pretrained
-            env["CONSTRAINT"] = axis
-            env["CONSTRAINT_VALUES"] = values
-            env["SAMPLES_PER_VALUE"] = str(spv)
-            env.pop("DIFFICULTY_OVERRIDES", None)
-            _write_conf(
-                name=name,
-                description=(
-                    f"Sweep: {axis}-count axis ({values}, {spv}/value), coloring "
-                    f"only with balanced χ∈{{2,3,4}} (special-coloring) for {m.pretrained}"
-                ),
-                env=env,
-            )
-            batches[batch].append(name)
-
     # --- Thinking vs no-thinking ablation: difficulty-separated, n=100/task ----
-    # Two arms (THINKING=0/1) × 3 difficulties × 3 models. Mirrors the standard
-    # per-difficulty split: a coloring-only job (special χ∈{2,3,4}) plus a
-    # directed_connectivity+shortest_path job, so all three tasks are covered at
-    # n=100/task. The run_eval THINKING flag flips enable_thinking (vllm) / the
-    # R1 system prompt (InternVL) and raises max_new_tokens to 4096. The think
-    # arm's coloring/conn+sp jobs are the expensive ones (long reasoning).
+    # Two arms (THINKING=0/1) × 3 difficulties × 3 models, all three tasks per
+    # job (coloring χ-controlled by default). The run_eval THINKING flag flips
+    # enable_thinking (vllm) / the R1 system prompt (InternVL) and raises
+    # max_new_tokens so the <think> block can close. Think jobs are the
+    # expensive ones (long reasoning).
     think_jobs: list[str] = []
     nothink_jobs: list[str] = []
     for mode, thinking in (("nothink", "0"), ("think", "1")):
@@ -507,49 +376,25 @@ def main() -> None:
         chunk = CHUNK_THINK if thinking == "1" else CHUNK_ABLATION
         for diff in STANDARD_DIFFICULTIES:
             for m in THINK_MODELS:
-                # coloring only, balanced χ∈{2,3,4} (special coloring)
-                cname = f"graph_bench_think_{mode}_coloring_{diff}_{m.short}"
-                cenv = _standard_env(THINK_ABLATION_N, chunk)
-                cenv["DIFFICULTY"] = diff
-                cenv.pop("DIFFICULTY_OVERRIDES", None)
-                cenv["TASKS"] = "coloring"
-                cenv["SPECIAL_COLORING"] = "1"
-                cenv["THINKING"] = thinking
-                cenv["MODEL_PRETRAINED"] = m.pretrained
+                name = f"graph_bench_think_{mode}_{diff}_{m.short}"
+                env = _standard_env(THINK_ABLATION_N, chunk)
+                env["DIFFICULTY"] = diff
+                env.pop("DIFFICULTY_OVERRIDES", None)
+                env["THINKING"] = thinking
+                env["MODEL_PRETRAINED"] = m.pretrained
                 # InternVL runs through vllm for the ablation (batched/fast, and
                 # temperature actually applies — the HF wrapper silently drops it).
                 # Its R1 thinking is set by run_eval via system_prompt=internvl_r1.
                 # Both arms use vllm so they differ only by thinking; Gemma already
                 # maps to vllm.
                 if m.short == "internvl35_4b":
-                    cenv["MODEL_NAME_OVERRIDE"] = "vllm"
-                    cenv["INTERNVL_R1_VARIANT"] = "internvl_r1_v1"  # commit-rule R1 (0% trunc, best acc)
-                _write_conf(
-                    name=cname,
-                    description=(
-                        f"Thinking ablation ({mode}): coloring only, balanced "
-                        f"χ∈{{2,3,4}} (special-coloring), n={THINK_ABLATION_N}/task, "
-                        f"difficulty={diff} for {m.pretrained}"
-                    ),
-                    env=cenv,
-                )
-                bucket.append(cname)
-                # directed_connectivity + shortest_path
-                name = f"graph_bench_think_{mode}_{diff}_{m.short}"
-                env = _standard_env(THINK_ABLATION_N, chunk)
-                env["DIFFICULTY"] = diff
-                env.pop("DIFFICULTY_OVERRIDES", None)
-                env["TASKS"] = "directed_connectivity shortest_path"
-                env["THINKING"] = thinking
-                env["MODEL_PRETRAINED"] = m.pretrained
-                if m.short == "internvl35_4b":
                     env["MODEL_NAME_OVERRIDE"] = "vllm"
                     env["INTERNVL_R1_VARIANT"] = "internvl_r1_v1"  # commit-rule R1 (0% trunc, best acc)
                 _write_conf(
                     name=name,
                     description=(
-                        f"Thinking ablation ({mode}): directed_connectivity + "
-                        f"shortest_path, n={THINK_ABLATION_N}/task, difficulty={diff} "
+                        f"Thinking ablation ({mode}): all tasks, "
+                        f"n={THINK_ABLATION_N}/task, difficulty={diff} "
                         f"for {m.pretrained}"
                     ),
                     env=env,
@@ -580,49 +425,39 @@ def main() -> None:
             chunk = thinking_chunk if thinking == "1" else CHUNK_ABLATION
             for diff in difficulties:
                 for m in THINK_MODELS:
-                    for tasks, special, infix in (
-                        ("coloring", True, "coloring_"),
-                        ("directed_connectivity shortest_path", False, ""),
-                    ):
-                        name = f"{job_prefix}_{mode}_{infix}{diff}_{m.short}"
-                        env = _standard_env(num_samples, chunk)
-                        env["DIFFICULTY"] = diff
-                        env.pop("DIFFICULTY_OVERRIDES", None)
-                        env["TASKS"] = tasks
-                        if special:
-                            env["SPECIAL_COLORING"] = "1"
-                        env["INCLUDE_ADJ_MATRIX"] = "1"
-                        env["THINKING"] = thinking
-                        # Incremental run: generate samples [start_index, +num_samples)
-                        # so an existing lower-N run can be reused (prefix-stable gen).
-                        if start_index:
-                            env["START_INDEX"] = str(start_index)
-                        env["MODEL_PRETRAINED"] = m.pretrained
-                        # Mirror the pure thinking ablation exactly: InternVL runs
-                        # through vllm with the commit-rule R1 preset (0% trunc).
-                        if m.short == "internvl35_4b":
-                            env["MODEL_NAME_OVERRIDE"] = "vllm"
-                            env["INTERNVL_R1_VARIANT"] = "internvl_r1_v1"
-                        tasklabel = (
-                            "coloring only (special-coloring χ∈{2,3,4} uniform)"
-                            if special else "directed_connectivity + shortest_path"
-                        )
-                        _write_conf(
-                            name=name,
-                            description=(
-                                f"Thinking×adjacency-list ablation ({mode}"
-                                f"{', SMOKE' if smoke else ''}): {tasklabel}, "
-                                f"adjacency list injected in prompt, "
-                                f"n={num_samples}/task, difficulty={diff} "
-                                f"for {m.pretrained}"
-                            ),
-                            env=env,
-                        )
-                        bucket.append(name)
+                    name = f"{job_prefix}_{mode}_{diff}_{m.short}"
+                    env = _standard_env(num_samples, chunk)
+                    env["DIFFICULTY"] = diff
+                    env.pop("DIFFICULTY_OVERRIDES", None)
+                    env["INCLUDE_ADJ_MATRIX"] = "1"
+                    env["THINKING"] = thinking
+                    # Incremental run: generate samples [start_index, +num_samples)
+                    # so an existing lower-N run can be reused (prefix-stable gen).
+                    if start_index:
+                        env["START_INDEX"] = str(start_index)
+                    env["MODEL_PRETRAINED"] = m.pretrained
+                    # Mirror the pure thinking ablation exactly: InternVL runs
+                    # through vllm with the commit-rule R1 preset (0% trunc).
+                    if m.short == "internvl35_4b":
+                        env["MODEL_NAME_OVERRIDE"] = "vllm"
+                        env["INTERNVL_R1_VARIANT"] = "internvl_r1_v1"
+                    _write_conf(
+                        name=name,
+                        description=(
+                            f"Thinking×adjacency-list ablation ({mode}"
+                            f"{', SMOKE' if smoke else ''}): all tasks, "
+                            f"adjacency list injected in prompt, "
+                            f"n={num_samples}/task, difficulty={diff} "
+                            f"for {m.pretrained}"
+                        ),
+                        env=env,
+                    )
+                    bucket.append(name)
         return think_j, nothink_j
 
-    # Full combined ablation: 2 arms × 3 diff × 3 models × 2 job-types = 36 jobs,
-    # n=100/task. Same cost-balanced VM interleave as the pure thinking ablation.
+    # Full combined ablation: 2 arms × 3 diff × 3 models = 18 jobs (all tasks
+    # per job), n=100/task. Same cost-balanced VM interleave as the pure
+    # thinking ablation.
     ta_think, ta_nothink = _emit_thinkadj(
         "graph_bench_thinkadj", THINK_ABLATION_N, CHUNK_THINK,
         STANDARD_DIFFICULTIES, smoke=False,
@@ -636,7 +471,7 @@ def main() -> None:
     # = f(seed, task, i), independent of N — verified), so we only run the extra
     # 400 samples (indices 100..499, START_INDEX=100) per cell and POOL with the
     # existing 100 at report time to get an exact n=500 result. Same per-model
-    # think mechanism/budgets as thinkadj (all in run_eval.sh). 36 jobs.
+    # think mechanism/budgets as thinkadj (all in run_eval.sh). 18 jobs.
     inc_think, inc_nothink = _emit_thinkadj(
         "graph_bench_thinkadj500inc", 400, CHUNK_THINK,
         STANDARD_DIFFICULTIES, smoke=False, start_index=100,
@@ -648,7 +483,7 @@ def main() -> None:
     batches["thinkadj500inc_vm03"] = inc_think[1::2] + inc_nothink[1::2]
 
     # Smoke gate: hard only (worst case for prompt length + over-deliberation),
-    # n=10, both arms, all 3 models, both job-types = 12 jobs. Confirms before
+    # n=10, both arms, all 3 models = 6 jobs. Confirms before
     # the multi-hour full run that (a) the adjacency list is injected alongside
     # thinking, (b) the longer prompt doesn't OOM the 12 GiB card, (c) reasoning
     # still closes (Qwen native budget) with ~0 truncation, (d) the answer stays
@@ -679,51 +514,34 @@ def main() -> None:
             chunk = CHUNK_THINK if thinking == "1" else CHUNK_ABLATION
             for diff in difficulties:
                 for m in THINK_MODELS:
-                    for tasks, special, infix in (
-                        ("coloring", True, "coloring_"),
-                        ("directed_connectivity shortest_path", False, ""),
-                    ):
-                        name = f"graph_bench_scram_{mode}_{infix}{diff}_{m.short}"
-                        env = _standard_env(THINK_ABLATION_N, chunk)
-                        env["DIFFICULTY"] = diff
-                        env.pop("DIFFICULTY_OVERRIDES", None)
-                        env["TASKS"] = tasks
-                        if special:
-                            env["SPECIAL_COLORING"] = "1"
-                        env["INCLUDE_ADJ_MATRIX"] = "1"
-                        env["THINKING"] = thinking
-                        env["SCRAMBLE_IMAGE"] = "1"
-                        env["MODEL_PRETRAINED"] = m.pretrained
-                        if m.short == "internvl35_4b":
-                            env["MODEL_NAME_OVERRIDE"] = "vllm"
-                            env["INTERNVL_R1_VARIANT"] = "internvl_r1_v1"
-                        _write_conf(
-                            name=name,
-                            description=(
-                                f"Scrambled-image (no-image control) + {mode} + adjacency list: "
-                                f"{'coloring only (special-coloring)' if special else 'directed_connectivity + shortest_path'}, "
-                                f"n={THINK_ABLATION_N}/task, difficulty={diff} for {m.pretrained}"
-                            ),
-                            env=env,
-                        )
-                        bucket.append(name)
+                    name = f"graph_bench_scram_{mode}_{diff}_{m.short}"
+                    env = _standard_env(THINK_ABLATION_N, chunk)
+                    env["DIFFICULTY"] = diff
+                    env.pop("DIFFICULTY_OVERRIDES", None)
+                    env["INCLUDE_ADJ_MATRIX"] = "1"
+                    env["THINKING"] = thinking
+                    env["SCRAMBLE_IMAGE"] = "1"
+                    env["MODEL_PRETRAINED"] = m.pretrained
+                    if m.short == "internvl35_4b":
+                        env["MODEL_NAME_OVERRIDE"] = "vllm"
+                        env["INTERNVL_R1_VARIANT"] = "internvl_r1_v1"
+                    _write_conf(
+                        name=name,
+                        description=(
+                            f"Scrambled-image (no-image control) + {mode} + adjacency list: "
+                            f"all tasks, n={THINK_ABLATION_N}/task, "
+                            f"difficulty={diff} for {m.pretrained}"
+                        ),
+                        env=env,
+                    )
+                    bucket.append(name)
         return think_j, nothink_j
 
     scram_think, scram_nothink = _emit_scram(STANDARD_DIFFICULTIES)
     batches["scram_ablation"] = scram_think + scram_nothink
-    # Early fast run: Qwen only, medium+hard. vm02 = coloring jobs (lighter),
-    # vm03 = conn+sp jobs (heavier, cover 2 tasks). Chunked so partial fetch works.
-    _q = "qwen35_4b"
-
-    def _early(jobs, coloring):
-        return [n for n in jobs
-                if n.endswith(f"_{_q}") and ("_medium_" in n or "_hard_" in n)
-                and (("_coloring_" in n) == coloring)]
-
-    batches["scram_qwen_early_vm02"] = _early(scram_think, True)    # think coloring (running)
-    batches["scram_qwen_early_vm03"] = _early(scram_think, False)   # think conn+sp (running)
-    batches["scram_qwen_nothink_early_vm02"] = _early(scram_nothink, True)    # nothink coloring
-    batches["scram_qwen_nothink_early_vm03"] = _early(scram_nothink, False)   # nothink conn+sp
+    # Cost-balanced VM split, same interleave as the other think-family batches.
+    batches["scram_ablation_vm02"] = scram_think[0::2] + scram_nothink[0::2]
+    batches["scram_ablation_vm03"] = scram_think[1::2] + scram_nothink[1::2]
 
     # --- Combined difficulty-separated ablation batch -------------------------
     # labels(letters+none) + node-color, difficulty-separated, n=100/task, all
