@@ -37,6 +37,7 @@ one with ``variant="direct"`` and one with ``variant="disguise"``.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import io
 import json
@@ -303,6 +304,21 @@ _META_FILENAME = "prepare_meta.json"
 _TOC_FILENAME = "chunks.toc.json"
 
 
+def _benchmark_code_hash() -> str:
+    """Hash of the dynamic-dataset ``src.benchmark`` package sources.
+
+    Dataset content depends on the generator/renderer code, not just the
+    prepare args — without this, deploying a renderer fix silently reuses
+    stale on-disk datasets (fingerprint 'matches'). Any change to the
+    package regenerates."""
+    root = Path(benchmark.__file__).resolve().parent
+    h = hashlib.sha256()
+    for p in sorted(root.rglob("*.py")):
+        h.update(p.relative_to(root).as_posix().encode())
+        h.update(p.read_bytes())
+    return h.hexdigest()[:16]
+
+
 def _fingerprint(args: argparse.Namespace) -> dict:
     """Stable, hashable view of the args that determine the dataset content.
 
@@ -313,6 +329,7 @@ def _fingerprint(args: argparse.Namespace) -> dict:
     # lists-of-lists so the JSON roundtrip on prepare_meta.json compares equal.
     overrides = sorted([list(o) for o in args.difficulty_override])
     return {
+        "benchmark_code_hash": _benchmark_code_hash(),
         "seed": int(args.seed),
         "num_samples": int(args.num_samples),
         "start_index": int(args.start_index),
