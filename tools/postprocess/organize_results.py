@@ -53,29 +53,34 @@ _DIFF = r"(?P<diff>easy|medium|hard)"
 _MODEL = r"(?P<model>[a-z0-9]+_[a-z0-9]+)"
 _COL = r"(?:(?P<col>coloring)_)?"  # optional coloring-only job marker
 
+# Campaigns 01-09 are the PRE-FIX tree (render bug / fp8 blindness / default-chi
+# coloring); they stay on disk untouched as the archive. Everything fetched from
+# 2026-07-16 on files into the fresh 10+ tree so old and new results never mix.
 SPECS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(rf"^scram_(?P<arm>think|nothink)_{_COL}{_DIFF}_{_MODEL}$"),
-     "09_abl_scram", "{model}_{diff}_{arm}"),
+     "17_abl_scram", "{model}_{diff}_{arm}"),
     (re.compile(rf"^thinkadj500inc_(?P<arm>think|nothink)_{_COL}{_DIFF}_{_MODEL}$"),
-     "08_abl_thinkadj", "{model}_{diff}_{arm}_inc"),
+     "16_abl_thinkadj", "{model}_{diff}_{arm}_inc"),
     (re.compile(rf"^thinkadj_(?P<arm>think|nothink)_{_COL}{_DIFF}_{_MODEL}$"),
-     "08_abl_thinkadj", "{model}_{diff}_{arm}"),
+     "16_abl_thinkadj", "{model}_{diff}_{arm}"),
     (re.compile(rf"^think_(?P<arm>think|nothink)_{_COL}{_DIFF}_{_MODEL}$"),
-     "07_abl_think", "{model}_{diff}_{arm}"),
+     "15_abl_think", "{model}_{diff}_{arm}"),
     (re.compile(rf"^ablation_adjlist_{_COL}{_DIFF}_{_MODEL}$"),
-     "04_abl_adjlist", "{model}_{diff}"),
+     "12_abl_adjlist", "{model}_{diff}"),
     (re.compile(rf"^ablation_labels_(?P<style>letters|none)_{_COL}{_DIFF}_{_MODEL}$"),
-     "05_abl_labels", "{model}_{diff}_{style}"),
+     "13_abl_labels", "{model}_{diff}_{style}"),
     (re.compile(rf"^ablation_color_{_COL}{_DIFF}_{_MODEL}$"),
-     "06_abl_color", "{model}_{diff}"),
+     "14_abl_color", "{model}_{diff}"),
+    # Legacy job family (no longer generated): old dedicated coloring jobs
+    # still file into the legacy 03 dir if ever refetched.
     (re.compile(rf"^coloring_{_DIFF}_{_MODEL}$"),
      "03_coloring_chi", "{model}_{diff}"),
     (re.compile(rf"^standard_{_DIFF}_{_MODEL}$"),
-     "01_standard", "{model}_{diff}"),
+     "10_standard", "{model}_{diff}"),
     (re.compile(rf"^sweep_(?P<constraint>edges|nodes)_(?P<col>coloring)_{_MODEL}$"),
-     "02_sweep_size", "{model}_{constraint}"),
+     "11_sweep_size", "{model}_{constraint}"),
     (re.compile(rf"^sweep_(?P<constraint>edges|nodes)_{_MODEL}$"),
-     "02_sweep_size", "{model}_{constraint}"),
+     "11_sweep_size", "{model}_{constraint}"),
 ]
 
 SCRATCH_RE = re.compile(r"smoke|promptexp|fp8think|v1ab|gemmatok")
@@ -87,16 +92,31 @@ TASK_FOLDER = {
 }
 VARIANT_FOLDER = {"direct": "original", "disguise": "disguise"}
 
+_LEGACY_NOTE = ("PRE-FIX LEGACY ARCHIVE (superseded 2026-07-16 by the 10+ tree: "
+                "direct-render occlusion bug, fp8 vision blindness, default-chi "
+                "coloring). Do not mix with 10+ results. ")
 CAMPAIGN_DESC = {
-    "01_standard": "Baseline benchmark, n=500/task, 3 difficulties x 3 models. All three tasks, original + disguise.",
-    "02_sweep_size": "Graph-size scaling sweeps (edges & nodes; *_chi = special-coloring sweep). Difficulty replaced by the swept size; leaf = <model>_<constraint>.",
-    "03_coloring_chi": "LEGACY (absorbed into 01_standard 2026-07-16: chi-controlled coloring is now the prepare default, so coloring rides in every base job). Kept to file archived results.",
-    "04_abl_adjlist": "Adjacency list injected into the prompt. n=100/task, 3 difficulties x 3 models.",
-    "05_abl_labels": "Node-label style ablation (letters / none vs the numeric baseline). n=100/task.",
-    "06_abl_color": "Node fill-colour ablation. n=100/task, 3 difficulties x 3 models.",
-    "07_abl_think": "Thinking on/off ablation (image-only prompt). Both arms, n=100/task.",
-    "08_abl_thinkadj": "Thinking x adjacency-list ablation. Both arms. n=500 = base (n=100) pooled with _inc (n=400); InternVL base-only. leaf arm in {think,nothink}, _inc marks the 400-sample increment.",
-    "09_abl_scram": "Scrambled ('no-info') image control. Both arms; full grid is 3 difficulties x 3 models (early partial runs were Qwen-only medium+hard).",
+    # ---- legacy pre-fix tree (01-09): archive only, nothing new files here
+    # (except 03, which still catches refetches of the retired coloring jobs).
+    "01_standard": _LEGACY_NOTE + "Baseline benchmark, n=500/task.",
+    "02_sweep_size": _LEGACY_NOTE + "Graph-size scaling sweeps.",
+    "03_coloring_chi": _LEGACY_NOTE + "Dedicated special-chi coloring jobs (family retired: chi-control is the prepare default and coloring rides in every base job).",
+    "04_abl_adjlist": _LEGACY_NOTE + "Adjacency-list ablation.",
+    "05_abl_labels": _LEGACY_NOTE + "Label-style ablation.",
+    "06_abl_color": _LEGACY_NOTE + "Node-colour ablation.",
+    "07_abl_think": _LEGACY_NOTE + "Thinking on/off ablation.",
+    "08_abl_thinkadj": _LEGACY_NOTE + "Thinking x adjacency-list ablation.",
+    "09_abl_scram": _LEGACY_NOTE + "Scrambled-image control.",
+    # ---- post-fix rerun tree (10+): occlusion-aware renders, bf16 vision under
+    # fp8, chi-controlled coloring in every base job (all three tasks per job).
+    "10_standard": "Baseline benchmark v2, n=500/task, 3 difficulties x 3 models. All three tasks (coloring chi-controlled), original + disguise.",
+    "11_sweep_size": "Graph-size scaling sweeps v2 (edges & nodes), all three tasks per job; leaf = <model>_<constraint>.",
+    "12_abl_adjlist": "Adjacency list injected into the prompt. n=100/task, 3 difficulties x 3 models, all three tasks.",
+    "13_abl_labels": "Node-label style ablation (letters / none vs the numeric baseline). n=100/task, all three tasks.",
+    "14_abl_color": "Node fill-colour ablation. n=100/task, 3 difficulties x 3 models, all three tasks.",
+    "15_abl_think": "Thinking on/off ablation (image-only prompt). Both arms, n=100/task, all three tasks.",
+    "16_abl_thinkadj": "Thinking x adjacency-list ablation. Both arms, n=100/task, all three tasks; _inc marks the deferred 400-sample increment (pool for n=500).",
+    "17_abl_scram": "Scrambled ('no-info') image control + adjacency list. Both arms, 3 difficulties; Qwen + InternVL required, Gemma optional.",
 }
 
 SAMPLES_RE = re.compile(r"^(?P<ts>\d{8}_\d{6})_samples_(?P<task>.+)\.jsonl$")

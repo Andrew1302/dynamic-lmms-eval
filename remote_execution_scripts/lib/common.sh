@@ -142,7 +142,10 @@ job_data_dir() {
     local flat="${LOCAL_RESULTS_DIR}/${job}"
     if [ -d "$flat" ]; then echo "$flat"; return; fi
     local filed
-    filed="$(ls -d "${LOCAL_RESULTS_DIR}"/*/_jobs/"${job}" 2>/dev/null | head -1)"
+    # -t (newest mtime first): the same job name can be filed in a legacy
+    # campaign (01-09, pre-fix archive) AND the post-fix 10+ tree — plain
+    # lexicographic head -1 would resolve to the stale legacy copy.
+    filed="$(ls -dt "${LOCAL_RESULTS_DIR}"/*/_jobs/"${job}" 2>/dev/null | head -1)"
     if [ -n "$filed" ]; then echo "$filed"; return; fi
     echo "$flat"
 }

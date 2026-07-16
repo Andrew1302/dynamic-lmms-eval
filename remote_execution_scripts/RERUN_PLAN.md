@@ -9,11 +9,19 @@ Use the `vm-batch-runner` skill for all execution mechanics.
 **Merged job layout (Stage 1, 2026-07-16):** χ-controlled coloring
 (uniform {2,3,4}, linear 2→3→4 per sample index) is now the prepare
 tool's UNCONDITIONAL default, so the old separate `*_coloring_*` jobs no
-longer exist — every base job runs all three tasks. The old
-03_coloring_chi campaign is absorbed into 01_standard. Job counts below
+longer exist — every base job runs all three tasks. Job counts below
 are the new (halved) ones. The coloring χ=2 duplicate collapse was also
 fixed (rng BFS root in dynamic-dataset), so all coloring graphs differ
 from any pre-2026-07-16 fetch.
+
+**Fresh campaign tree (10+):** the rerun files into NEW numbered
+campaign dirs `10_standard, 11_sweep_size, 12_abl_adjlist,
+13_abl_labels, 14_abl_color, 15_abl_think, 16_abl_thinkadj,
+17_abl_scram` (stamped in every conf; the organizer SPECS map job names
+there automatically). `remote_results/01_*..09_*` are the untouched
+PRE-FIX legacy archive — never file into, read from, or report over
+them for the paper. `job_data_dir` resolves a job name present in both
+trees to the newest copy (mtime), so reports pick the rerun.
 
 ## Why everything below is invalid
 
@@ -38,18 +46,18 @@ skipping". If it skips, the deploy did not reach the VM — stop and fix.
 
 ## Execution order
 
-| # | Campaign | Batch manifest(s) | Jobs | Models | Why |
-|---|----------|-------------------|------|--------|-----|
-| 0 | smoke gate | `fp8smoke_vm03.txt` (+`_rest`) | 24 tiny (n=2/task) | Qwen, InternVL | validate NEW images end-to-end before burning GPU-days; includes sp-solvability hand-check (see below) |
-| 1 | 07_abl_think | `think_ablation_vm02.txt` + `think_ablation_vm03.txt` | 18 (n=100, all 3 tasks each) | all 3 | render fix + fp8 blindness + force-close + extraction |
-| 2 | 01_standard | `standard.txt` | 9 (n=500, all 3 tasks each; includes the old 03 coloring content) | all 3 | render fix; sp accuracy was suspiciously low — now measurable on readable images |
-| 3 | 08_abl_thinkadj | `thinkadj_ablation_vm02.txt` + `_vm03.txt` | 18 (n=100) | all 3 | fp8 blindness invalidated the whole design (blind image arm degenerates to scramble); render fix |
-| 4 | 04_abl_adjlist | `ablation_adjlist.txt` | 9 | all 3 | image arm of img-vs-img+adj comparison was corrupted |
-| 5 | 02_sweep_size | `sweep_nodes.txt`, `sweep_edges.txt` | 6 | all 3 | direct images |
-| 6 | 05_abl_labels | `ablation_labels.txt` (or per-style `_letters`/`_none`) | 18 | all 3 | direct images |
-| 7 | 06_abl_color | `ablation_color.txt` | 9 | all 3 | direct images |
-| 8 | 09_abl_scram | `scram_ablation_vm02.txt` + `_vm03.txt` — Qwen + InternVL jobs only | 12 of 18 | Qwen, InternVL | fp8 fix + control consistency. Gemma scram jobs OPTIONAL (scrambled pixels carry no structure either way) |
-| — | thinkadj500inc | `thinkadj500inc_*.txt` | 18 | all 3 | DEFERRED (tier-4 n=500 increments) — only if time remains |
+| # | Campaign (10+ tree) | Batch manifest(s) | Jobs | Models | Why |
+|---|---------------------|-------------------|------|--------|-----|
+| 0 | smoke gate (_scratch) | `fp8smoke_vm03.txt` (+`_rest`) | 24 tiny (n=2/task) | Qwen, InternVL | validate NEW images end-to-end before burning GPU-days; includes sp-solvability hand-check (see below) |
+| 1 | 15_abl_think | `think_ablation_vm02.txt` + `think_ablation_vm03.txt` | 18 (n=100, all 3 tasks each) | all 3 | render fix + fp8 blindness + force-close + extraction |
+| 2 | 10_standard | `standard.txt` | 9 (n=500, all 3 tasks each; includes the old 03 coloring content) | all 3 | render fix; sp accuracy was suspiciously low — now measurable on readable images |
+| 3 | 16_abl_thinkadj | `thinkadj_ablation_vm02.txt` + `_vm03.txt` | 18 (n=100) | all 3 | fp8 blindness invalidated the whole design (blind image arm degenerates to scramble); render fix |
+| 4 | 12_abl_adjlist | `ablation_adjlist.txt` | 9 | all 3 | image arm of img-vs-img+adj comparison was corrupted |
+| 5 | 11_sweep_size | `sweep_nodes.txt`, `sweep_edges.txt` | 6 | all 3 | direct images |
+| 6 | 13_abl_labels | `ablation_labels.txt` (or per-style `_letters`/`_none`) | 18 | all 3 | direct images |
+| 7 | 14_abl_color | `ablation_color.txt` | 9 | all 3 | direct images |
+| 8 | 17_abl_scram | `scram_ablation_vm02.txt` + `_vm03.txt` — Qwen + InternVL jobs only | 12 of 18 | Qwen, InternVL | fp8 fix + control consistency. Gemma scram jobs OPTIONAL (scrambled pixels carry no structure either way) |
+| — | 16 (_inc leaves) | `thinkadj500inc_*.txt` | 18 | all 3 | DEFERRED (tier-4 n=500 increments) — only if time remains |
 
 NOT rerun: nothing else. Old sp-disguise-map results were faithful (the map
 change is readability polish), but they get replaced anyway because every
