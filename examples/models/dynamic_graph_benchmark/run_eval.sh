@@ -20,9 +20,10 @@
 #   NODE_COLOR             hex (default #AED6F1)
 #   EDGE_STYLE             straight|curved (default straight)
 #   INCLUDE_ADJ_MATRIX     1 to enable, 0/empty to disable
-#   SPECIAL_COLORING       1 to plant the coloring task's chromatic number
-#                          uniformly across {2,3,4} (linear 2→3→4 per sample);
-#                          0/empty keeps the default full-triangulation graphs
+#   SPECIAL_COLORING       DEPRECATED no-op: χ-controlled coloring (uniform
+#                          {2,3,4}, linear 2→3→4 per sample) is now always on
+#                          in the prepare tool; the env var is still forwarded
+#                          but ignored there
 #   THINKING               1 enables the model's reasoning mode (per-request,
 #                          single checkpoint); 0/empty disables it. Also bumps
 #                          max_new_tokens to 4096 so the <think> block can close

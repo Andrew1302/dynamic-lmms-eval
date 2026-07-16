@@ -121,13 +121,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--include-adjacency-matrix", action="store_true",
                         help="Append a text adjacency matrix to the direct-view prompt.")
     parser.add_argument("--special-coloring", action="store_true",
-                        help="Coloring task only: instead of the default full Delaunay "
-                             "triangulation (whose chromatic number concentrates on 3-4 "
-                             "and is nearly constant), build controlled subgraphs whose "
-                             "chromatic number is planted to linearly cover {2, 3, 4} — "
-                             "each consecutive coloring sample cycles 2→3→4, so the answer "
-                             "distribution is uniform over the three values. No effect on "
-                             "other tasks or in sweep mode.")
+                        help="DEPRECATED no-op: χ-controlled coloring is now always on. "
+                             "The coloring task builds controlled subgraphs whose chromatic "
+                             "number linearly covers {2, 3, 4} (each consecutive coloring "
+                             "sample cycles 2→3→4, uniform answer distribution). The old "
+                             "default — full Delaunay triangulation, χ concentrated on 3-4, "
+                             "nearly constant answer — is no longer reachable. The flag is "
+                             "accepted so old confs still source.")
     parser.add_argument("--no-validate-images", action="store_true",
                         help="Skip the post-generation image-integrity check. By default "
                              "(standard mode) a sample of rows — including the first render "
@@ -173,11 +173,11 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.constraint is not None and args.constraint_values is None:
         parser.error("--constraint requires --constraint-values")
-    # --special-coloring composes with sweep mode: it only affects the coloring
-    # task, where node_count and target_chromatic are independent knobs (see
-    # graph_sampling.coloring_graph). In sweep mode χ is planted per value
-    # bucket, clamped so node_count >= χ (a graph can't require more colors
-    # than it has nodes).
+    # χ-controlled coloring composes with sweep mode: it only affects the
+    # coloring task, where node_count and target_chromatic are independent
+    # knobs (see graph_sampling.coloring_graph). In sweep mode χ is planted
+    # per value bucket, clamped so node_count >= χ (a graph can't require
+    # more colors than it has nodes).
     return args
 
 
@@ -340,7 +340,10 @@ def _fingerprint(args: argparse.Namespace) -> dict:
         "node_color": args.node_color,
         "edge_style": args.edge_style,
         "include_adjacency_matrix": bool(args.include_adjacency_matrix),
-        "special_coloring": bool(args.special_coloring),
+        # χ-controlled coloring is unconditional now; stamped True so meta
+        # written by older versions (False for default-coloring datasets)
+        # correctly compares unequal and triggers regeneration.
+        "special_coloring": True,
         "constraint": args.constraint,
         "constraint_values": args.constraint_values,
         "samples_per_value": args.samples_per_value,
@@ -558,7 +561,7 @@ def _validate_stored_images(ds, args, cfg, task_names, mod) -> None:
         if not m or m.group("task") not in task_names:
             continue
         task_name, variant, i = m.group("task"), m.group("variant"), int(m.group("i"))
-        tc = 2 + (i % 3) if (args.special_coloring and task_name == "coloring") else None
+        tc = 2 + (i % 3) if task_name == "coloring" else None
         try:
             s = mod.get_all_tasks()[task_name]().generate(
                 seed=int(row["seed"]),
@@ -727,10 +730,7 @@ def _generate_standard(args, cfg, task_names):
           f"across {task_names} (difficulty={difficulty_for}, seed={args.seed}, "
           f"label_style={args.label_style}, edge_style={args.edge_style}, "
           f"adj_matrix={args.include_adjacency_matrix}, "
-          f"special_coloring={args.special_coloring}, num_workers={args.num_workers})")
-    if args.special_coloring and "coloring" not in task_names:
-        print("[prepare_dynamic_graph_benchmark] WARNING: --special-coloring set but "
-              "'coloring' is not among the selected tasks — flag has no effect.")
+          f"special_coloring=always, num_workers={args.num_workers})")
 
     payloads = []
     for task_name in task_names:
@@ -746,12 +746,12 @@ def _generate_standard(args, cfg, task_names):
         # incremental n=400 run (i∈[100,500)) pool into an exact n=500 dataset.
         for i in range(args.start_index, args.start_index + args.num_samples):
             seed = args.seed + i * 1000 + task_salt
-            # Special coloring: plant χ linearly across {2,3,4} so the answer
+            # Coloring always plants χ linearly across {2,3,4} so the answer
             # distribution is uniform. Sample i cycles 2→3→4→2… (i % 3).
             # Only the coloring task supports target_chromatic; everything
             # else gets None (default generation).
             target_chromatic = None
-            if args.special_coloring and task_name == "coloring":
+            if task_name == "coloring":
                 target_chromatic = 2 + (i % 3)
             payloads.append((task_name, i, seed, difficulty, cfg,
                              args.include_adjacency_matrix, target_chromatic))
@@ -788,14 +788,14 @@ def _generate_sweep(args, cfg, task_names):
             for j in range(spv):
                 base_seed = args.seed + counter * 7919
                 counter += 1
-                # Special coloring: plant χ linearly across {2,3,4} per value
+                # Coloring always plants χ linearly across {2,3,4} per value
                 # bucket so the answer distribution is balanced at every point
-                # on the sweep axis (default coloring's χ concentrates on 3-4).
-                # Only the coloring task supports target_chromatic. On the node
-                # axis χ is clamped to ≤ node_count — a graph can't require more
-                # colors than it has nodes — so e.g. value=3 cycles {2,3}.
+                # on the sweep axis (the old default coloring's χ concentrated
+                # on 3-4). Only the coloring task supports target_chromatic. On
+                # the node axis χ is clamped to ≤ node_count — a graph can't
+                # require more colors than it has nodes — so value=3 cycles {2,3}.
                 target_chromatic = None
-                if args.special_coloring and task_name == "coloring":
+                if task_name == "coloring":
                     if args.constraint == "nodes":
                         feasible = [k for k in (2, 3, 4) if k <= value] or [2]
                     else:
