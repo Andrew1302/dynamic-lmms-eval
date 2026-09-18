@@ -1,0 +1,43 @@
+task: coloring
+variant: disguise
+seed: 900000010
+question: 'Q: How many colors are needed to color this map so that no two neighboring
+  regions share the same color?
+
+  A:'
+answer: '3'
+authoring_adjacency: 'Q: How many colors are needed to color this map so that no two
+  neighboring regions share the same color?
+
+
+  Adjacency list of the underlying graph:
+
+  Provided graph adjacency list.Encoding: adjacency list. Adj[u] = [v1, v2, ...] lists
+  the neighbors of node u.
+
+  Adj[0] = [1, 2, 5]
+
+  Adj[1] = [0, 2, 3]
+
+  Adj[2] = [0, 1, 3, 4, 5, 6]
+
+  Adj[3] = [1, 2, 6]
+
+  Adj[4] = [2, 5, 6]
+
+  Adj[5] = [0, 2, 4]
+
+  Adj[6] = [2, 3, 4]
+
+
+  A:'
+worked_solution: 'Region 2 shares a border with every other region on the map, so
+  no other region can reuse its colour. That spends one colour on region 2 alone.
+
+  Setting region 2 aside, the remaining borders are 0-1, 1-3, 3-6, 6-4, 4-5 and 5-0,
+  which form one ring of regions: 0, 1, 3, 6, 4, 5 and back to 0. The ring has six
+  regions, an even number, so two colours can simply alternate around it.
+
+  That is 2 for the ring plus 1 for region 2, so the answer is 3.
+
+  3'

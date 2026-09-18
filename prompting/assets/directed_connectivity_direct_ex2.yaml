@@ -1,0 +1,40 @@
+task: directed_connectivity
+variant: direct
+seed: 900000001
+question: 'Q: Following the arrow directions, is there a directed path from node 1
+  to node 7?
+
+  A:'
+answer: 'No'
+authoring_adjacency: 'Q: Following the arrow directions, is there a directed path
+  from node 1 to node 7?
+
+
+  Provided graph adjacency list.Encoding: adjacency list. Adj[u] = [v1, v2, ...] lists
+  the neighbors of node u.
+
+  Adj[0] = []
+
+  Adj[1] = []
+
+  Adj[2] = [6]
+
+  Adj[3] = [0]
+
+  Adj[4] = [0, 2, 7]
+
+  Adj[5] = []
+
+  Adj[6] = [1]
+
+  Adj[7] = [3, 5]
+
+
+  A:'
+worked_solution: 'Start at node 1 and look for arrows leaving it. Every arrow drawn
+  at node 1 points into it; none points away.
+
+  If no arrow leaves the starting node, no directed route can even begin, so node
+  7 cannot be reached.
+
+  No'

@@ -1,0 +1,40 @@
+task: coloring
+variant: direct
+seed: 900000015
+question: 'Q: What is the minimum number of colors needed to color this graph so that
+  no two adjacent nodes share a color?
+
+  A:'
+answer: '4'
+authoring_adjacency: 'Q: What is the minimum number of colors needed to color this
+  graph so that no two adjacent nodes share a color?
+
+
+  Provided graph adjacency list.Encoding: adjacency list. Adj[u] = [v1, v2, ...] lists
+  the neighbors of node u.
+
+  Adj[0] = [3, 4, 5]
+
+  Adj[1] = [2, 3, 4]
+
+  Adj[2] = [1, 4, 5]
+
+  Adj[3] = [0, 1, 4]
+
+  Adj[4] = [0, 1, 2, 3, 5]
+
+  Adj[5] = [0, 2, 4]
+
+
+  A:'
+worked_solution: 'Node 4 is joined to every other node, so no other node can share
+  its colour. That spends one colour on node 4 alone.
+
+  Setting node 4 aside, the edges that remain are 0-3, 3-1, 1-2, 2-5 and 5-0, which
+  form one ring: 0, 3, 1, 2, 5 and back to 0. The ring has five nodes, an odd number,
+  and two colours cannot alternate around an odd ring - going round, the last node
+  would end up next to a node of its own colour. So the ring needs 3.
+
+  That is 3 for the ring plus 1 for node 4, so the minimum is 4.
+
+  4'

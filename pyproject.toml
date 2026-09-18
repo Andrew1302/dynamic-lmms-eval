@@ -159,7 +159,9 @@ all = [
 "lmms_eval.tui.web.dist.assets" = ["**/*"]
 
 [tool.setuptools.packages.find]
-include = ["lmms_eval*"]
+# "prompting" holds eval-time prompt templates imported by the task hooks; it must
+# ship with the distribution, not just be importable from a repo-root cwd.
+include = ["lmms_eval*", "prompting*"]
 exclude = [
     "assets*",
     "benchmark*",

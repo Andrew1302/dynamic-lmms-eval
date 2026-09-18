@@ -125,6 +125,7 @@ _FOOTER = textwrap.dedent("""\
 
     UPLOAD_PATHS=(
         "lmms_eval"
+        "prompting"
         "tools"
         "examples/models/dynamic_graph_benchmark"
         "pyproject.toml"

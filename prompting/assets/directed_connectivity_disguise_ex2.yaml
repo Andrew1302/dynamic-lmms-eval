@@ -1,0 +1,44 @@
+task: directed_connectivity
+variant: disguise
+seed: 900000001
+question: 'Q: Each corridor passage in this maze has an arrow showing the only allowed
+  direction of travel. Following the arrows, is it possible to travel from the green
+  cell to the red cell?
+
+  A:'
+answer: 'No'
+authoring_adjacency: 'Q: Each corridor passage in this maze has an arrow showing the
+  only allowed direction of travel. Following the arrows, is it possible to travel
+  from the green cell to the red cell?
+
+
+  Adjacency list of the underlying graph:
+
+  Provided graph adjacency list.Encoding: adjacency list. Adj[u] = [v1, v2, ...] lists
+  the neighbors of node u.
+
+  Adj[0] = []
+
+  Adj[1] = []
+
+  Adj[2] = [6]
+
+  Adj[3] = [0]
+
+  Adj[4] = [0, 2, 7]
+
+  Adj[5] = []
+
+  Adj[6] = [1]
+
+  Adj[7] = [3, 5]
+
+
+  A:'
+worked_solution: 'Look at the corridors touching the green cell. Every arrow on them
+  points into the green cell; not one points away from it.
+
+  With no corridor that may be travelled outward, no route can leave the green cell
+  at all, so the red cell cannot be reached.
+
+  No'

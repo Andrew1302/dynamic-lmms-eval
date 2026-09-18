@@ -1,0 +1,39 @@
+task: shortest_path
+variant: direct
+seed: 900000001
+question: 'Q: In the weighted directed acyclic graph shown, what is the minimum-weight
+  path total from vertex 0 to vertex 4?
+
+  A:'
+answer: '12'
+authoring_adjacency: 'Q: In the weighted directed acyclic graph shown, what is the
+  minimum-weight path total from vertex 0 to vertex 4?
+
+
+  Encoding: adjacency list. Adj[u] = [(v, w), ...] lists each neighbor v of node u
+  and the weight w of edge (u, v).
+
+  Adj[0] = [(1, 2), (2, 8)]
+
+  Adj[1] = [(4, 10)]
+
+  Adj[2] = [(3, 5)]
+
+  Adj[3] = [(4, 10)]
+
+  Adj[4] = []
+
+
+  A:'
+worked_solution: 'Two arrows leave vertex 0: one to vertex 1 costing 2, one to vertex
+  2 costing 8.
+
+  Through vertex 1: 0 to 1 is 2, then the only arrow out of vertex 1 goes to vertex
+  4 costing 10, giving 2 + 10 = 12.
+
+  Through vertex 2: 0 to 2 is 8, then 2 to 3 is 5, then 3 to 4 is 10, giving 8 + 5
+  + 10 = 23.
+
+  The cheaper route totals 12, so the minimum is 12.
+
+  12'

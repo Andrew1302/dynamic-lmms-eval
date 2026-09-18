@@ -1,0 +1,45 @@
+task: shortest_path
+variant: disguise
+seed: 900000001
+question: 'Q: The map of Latin America below shows several cities and the available
+  driving routes between them. Each arrow indicates a one-way driving connection from
+  one city to another, and is labeled with the typical driving time in hours. What
+  is the minimum total driving time, in hours, from the start city to the end city?
+
+  A:'
+answer: '12'
+authoring_adjacency: 'Q: The map of Latin America below shows several cities and the
+  available driving routes between them. Each arrow indicates a one-way driving connection
+  from one city to another, and is labeled with the typical driving time in hours.
+  What is the minimum total driving time, in hours, from the start city to the end
+  city?
+
+
+  Adjacency list of the underlying graph:
+
+  Encoding: adjacency list. Adj[u] = [(v, w), ...] lists each neighbor v of node u
+  and the weight w of edge (u, v).
+
+  Adj[0] = [(1, 2), (2, 8)]
+
+  Adj[1] = [(4, 10)]
+
+  Adj[2] = [(3, 5)]
+
+  Adj[3] = [(4, 10)]
+
+  Adj[4] = []
+
+
+  A:'
+worked_solution: 'Two roads leave Tijuana, the start city: 2h to Cali and 8h to Recife.
+
+  Via Cali: 2h to Cali, then the only road onward runs 10h to Punta Arenas, giving
+  2 + 10 = 12 hours.
+
+  Via Recife: 8h to Recife, then 5h to Asuncion, then 10h to Punta Arenas, giving
+  8 + 5 + 10 = 23 hours.
+
+  The quicker route takes 12 hours, so the minimum total driving time is 12.
+
+  12'
