@@ -1,0 +1,45 @@
+{
+  "prompt_id": "cot_fewshot_img_v1",
+  "task": "shortest_path",
+  "variant": "disguise",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: The map of Latin America below shows several cities and the available driving routes between them. Each arrow indicates a one-way driving connection from one city to another, and is labeled with the typical driving time in hours. What is the minimum total driving time, in hours, from the start city to the end city?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "shortest_path_disguise_ex1.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "Two roads leave Tijuana, the start city: 5h to Havana and 8h to La Paz.\nVia Havana: 5h to Havana, then 3h on to La Paz, then 7h to Punta Arenas, giving 5 + 3 + 7 = 15 hours.\nStraight to La Paz: 8h, then 7h to Punta Arenas, giving 8 + 7 = 15 hours.\nBoth routes reach Punta Arenas in 15 hours, so the minimum total driving time is 15.\n15",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: The map of Latin America below shows several cities and the available driving routes between them. Each arrow indicates a one-way driving connection from one city to another, and is labeled with the typical driving time in hours. What is the minimum total driving time, in hours, from the start city to the end city?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "shortest_path_disguise_ex2.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "Two roads leave Tijuana, the start city: 2h to Cali and 8h to Recife.\nVia Cali: 2h to Cali, then the only road onward runs 10h to Punta Arenas, giving 2 + 10 = 12 hours.\nVia Recife: 8h to Recife, then 5h to Asuncion, then 10h to Punta Arenas, giving 8 + 5 + 10 = 23 hours.\nThe quicker route takes 12 hours, so the minimum total driving time is 12.\n12",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: The map of Latin America below shows several cities and the available driving routes between them. Each arrow indicates a one-way driving connection from one city to another, and is labeled with the typical driving time in hours. What is the minimum total driving time, in hours, from the start city to the end city?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as a single integer.",
+  "gen_kwargs": {
+    "max_new_tokens": 2048,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

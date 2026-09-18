@@ -1,0 +1,45 @@
+{
+  "prompt_id": "cot_fewshot_img_v1",
+  "task": "directed_connectivity",
+  "variant": "disguise",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: Each corridor passage in this maze has an arrow showing the only allowed direction of travel. Following the arrows, is it possible to travel from the green cell to the red cell?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+      "images": [
+        "directed_connectivity_disguise_ex1.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "The green cell is 5 and the red cell is 4. Follow the arrows out of the green cell: the corridor leaving cell 5 leads to cell 1, and the corridor leaving cell 1 leads on to cell 4.\nEvery step is travelled in the direction its arrow allows, so the trip from the green cell to the red cell is possible.\nYes",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: Each corridor passage in this maze has an arrow showing the only allowed direction of travel. Following the arrows, is it possible to travel from the green cell to the red cell?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+      "images": [
+        "directed_connectivity_disguise_ex2.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "Look at the corridors touching the green cell. Every arrow on them points into the green cell; not one points away from it.\nWith no corridor that may be travelled outward, no route can leave the green cell at all, so the red cell cannot be reached.\nNo",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: Each corridor passage in this maze has an arrow showing the only allowed direction of travel. Following the arrows, is it possible to travel from the green cell to the red cell?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+  "gen_kwargs": {
+    "max_new_tokens": 2048,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

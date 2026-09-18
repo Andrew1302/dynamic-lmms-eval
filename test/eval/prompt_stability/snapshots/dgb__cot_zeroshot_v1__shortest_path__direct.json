@@ -1,0 +1,21 @@
+{
+  "prompt_id": "cot_zeroshot_v1",
+  "task": "shortest_path",
+  "variant": "direct",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: In the weighted directed acyclic graph shown, what is the minimum-weight path total from vertex 0 to vertex 4?\n\nEncoding: adjacency list. Adj[u] = [(v, w), ...] lists each neighbor v of node u and the weight w of edge (u, v).\nAdj[0] = [(1, 6)]\nAdj[1] = [(2, 6), (4, 8)]\nAdj[2] = [(3, 5)]\nAdj[3] = [(4, 9)]\nAdj[4] = []\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as a single integer.",
+  "gen_kwargs": {
+    "max_new_tokens": 2048,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

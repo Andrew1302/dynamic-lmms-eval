@@ -1,0 +1,21 @@
+{
+  "prompt_id": "direct_v1",
+  "task": "directed_connectivity",
+  "variant": "disguise",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Answer with only 'Yes' or 'No'.\nQ: Each corridor passage in this maze has an arrow showing the only allowed direction of travel. Following the arrows, is it possible to travel from the green cell to the red cell?\nA:",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "Answer with only 'Yes' or 'No'.",
+  "gen_kwargs": {
+    "max_new_tokens": 64,
+    "temperature": 0.0,
+    "do_sample": false
+  }
+}

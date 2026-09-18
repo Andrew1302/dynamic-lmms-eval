@@ -1,0 +1,21 @@
+{
+  "prompt_id": "direct_v1",
+  "task": "directed_connectivity",
+  "variant": "direct",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Answer with only 'Yes' or 'No'.\nQ: Following the arrow directions, is there a directed path from node 8 to node 10?\nA:",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "Answer with only 'Yes' or 'No'.",
+  "gen_kwargs": {
+    "max_new_tokens": 64,
+    "temperature": 0.0,
+    "do_sample": false
+  }
+}

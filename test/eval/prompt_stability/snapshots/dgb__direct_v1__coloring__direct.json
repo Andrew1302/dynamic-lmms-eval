@@ -1,0 +1,21 @@
+{
+  "prompt_id": "direct_v1",
+  "task": "coloring",
+  "variant": "direct",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Answer with a single integer and nothing else.\nQ: What is the minimum number of colors needed to color this graph so that no two adjacent nodes share a color?\nA:",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "Answer with a single integer and nothing else.",
+  "gen_kwargs": {
+    "max_new_tokens": 64,
+    "temperature": 0.0,
+    "do_sample": false
+  }
+}
