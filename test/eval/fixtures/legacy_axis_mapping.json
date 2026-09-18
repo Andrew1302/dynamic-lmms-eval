@@ -1,0 +1,992 @@
+{
+ "graph_bench_ablation_adjlist_easy_gemma4_e2b": {
+  "axis": "adjlist",
+  "axis_value": "easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_ablation_adjlist_easy_internvl35_4b": {
+  "axis": "adjlist",
+  "axis_value": "easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_ablation_adjlist_easy_qwen35_4b": {
+  "axis": "adjlist",
+  "axis_value": "easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_ablation_adjlist_hard_gemma4_e2b": {
+  "axis": "adjlist",
+  "axis_value": "hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_ablation_adjlist_hard_internvl35_4b": {
+  "axis": "adjlist",
+  "axis_value": "hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_ablation_adjlist_hard_qwen35_4b": {
+  "axis": "adjlist",
+  "axis_value": "hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_ablation_adjlist_medium_gemma4_e2b": {
+  "axis": "adjlist",
+  "axis_value": "medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_ablation_adjlist_medium_internvl35_4b": {
+  "axis": "adjlist",
+  "axis_value": "medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_ablation_adjlist_medium_qwen35_4b": {
+  "axis": "adjlist",
+  "axis_value": "medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_ablation_color_easy_gemma4_e2b": {
+  "axis": "color",
+  "axis_value": "easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_ablation_color_easy_internvl35_4b": {
+  "axis": "color",
+  "axis_value": "easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_ablation_color_easy_qwen35_4b": {
+  "axis": "color",
+  "axis_value": "easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_ablation_color_hard_gemma4_e2b": {
+  "axis": "color",
+  "axis_value": "hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_ablation_color_hard_internvl35_4b": {
+  "axis": "color",
+  "axis_value": "hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_ablation_color_hard_qwen35_4b": {
+  "axis": "color",
+  "axis_value": "hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_ablation_color_medium_gemma4_e2b": {
+  "axis": "color",
+  "axis_value": "medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_ablation_color_medium_internvl35_4b": {
+  "axis": "color",
+  "axis_value": "medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_ablation_color_medium_qwen35_4b": {
+  "axis": "color",
+  "axis_value": "medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_ablation_labels_letters_easy_gemma4_e2b": {
+  "axis": "labels",
+  "axis_value": "letters/easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_ablation_labels_letters_easy_internvl35_4b": {
+  "axis": "labels",
+  "axis_value": "letters/easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_ablation_labels_letters_easy_qwen35_4b": {
+  "axis": "labels",
+  "axis_value": "letters/easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_ablation_labels_letters_hard_gemma4_e2b": {
+  "axis": "labels",
+  "axis_value": "letters/hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_ablation_labels_letters_hard_internvl35_4b": {
+  "axis": "labels",
+  "axis_value": "letters/hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_ablation_labels_letters_hard_qwen35_4b": {
+  "axis": "labels",
+  "axis_value": "letters/hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_ablation_labels_letters_medium_gemma4_e2b": {
+  "axis": "labels",
+  "axis_value": "letters/medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_ablation_labels_letters_medium_internvl35_4b": {
+  "axis": "labels",
+  "axis_value": "letters/medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_ablation_labels_letters_medium_qwen35_4b": {
+  "axis": "labels",
+  "axis_value": "letters/medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_ablation_labels_none_easy_gemma4_e2b": {
+  "axis": "labels",
+  "axis_value": "none/easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_ablation_labels_none_easy_internvl35_4b": {
+  "axis": "labels",
+  "axis_value": "none/easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_ablation_labels_none_easy_qwen35_4b": {
+  "axis": "labels",
+  "axis_value": "none/easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_ablation_labels_none_hard_gemma4_e2b": {
+  "axis": "labels",
+  "axis_value": "none/hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_ablation_labels_none_hard_internvl35_4b": {
+  "axis": "labels",
+  "axis_value": "none/hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_ablation_labels_none_hard_qwen35_4b": {
+  "axis": "labels",
+  "axis_value": "none/hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_ablation_labels_none_medium_gemma4_e2b": {
+  "axis": "labels",
+  "axis_value": "none/medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_ablation_labels_none_medium_internvl35_4b": {
+  "axis": "labels",
+  "axis_value": "none/medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_ablation_labels_none_medium_qwen35_4b": {
+  "axis": "labels",
+  "axis_value": "none/medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_fp8smoke_adj_nothink_easy_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_adj_nothink_easy_internvl35_4b"
+ },
+ "graph_bench_fp8smoke_adj_nothink_easy_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_adj_nothink_easy_qwen35_4b"
+ },
+ "graph_bench_fp8smoke_adj_nothink_hard_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_adj_nothink_hard_internvl35_4b"
+ },
+ "graph_bench_fp8smoke_adj_nothink_hard_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_adj_nothink_hard_qwen35_4b"
+ },
+ "graph_bench_fp8smoke_adj_nothink_medium_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_adj_nothink_medium_internvl35_4b"
+ },
+ "graph_bench_fp8smoke_adj_nothink_medium_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_adj_nothink_medium_qwen35_4b"
+ },
+ "graph_bench_fp8smoke_adj_think_easy_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_adj_think_easy_internvl35_4b"
+ },
+ "graph_bench_fp8smoke_adj_think_easy_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_adj_think_easy_qwen35_4b"
+ },
+ "graph_bench_fp8smoke_adj_think_hard_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_adj_think_hard_internvl35_4b"
+ },
+ "graph_bench_fp8smoke_adj_think_hard_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_adj_think_hard_qwen35_4b"
+ },
+ "graph_bench_fp8smoke_adj_think_medium_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_adj_think_medium_internvl35_4b"
+ },
+ "graph_bench_fp8smoke_adj_think_medium_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_adj_think_medium_qwen35_4b"
+ },
+ "graph_bench_fp8smoke_img_nothink_easy_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_img_nothink_easy_internvl35_4b"
+ },
+ "graph_bench_fp8smoke_img_nothink_easy_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_img_nothink_easy_qwen35_4b"
+ },
+ "graph_bench_fp8smoke_img_nothink_hard_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_img_nothink_hard_internvl35_4b"
+ },
+ "graph_bench_fp8smoke_img_nothink_hard_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_img_nothink_hard_qwen35_4b"
+ },
+ "graph_bench_fp8smoke_img_nothink_medium_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_img_nothink_medium_internvl35_4b"
+ },
+ "graph_bench_fp8smoke_img_nothink_medium_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_img_nothink_medium_qwen35_4b"
+ },
+ "graph_bench_fp8smoke_img_think_easy_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_img_think_easy_internvl35_4b"
+ },
+ "graph_bench_fp8smoke_img_think_easy_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_img_think_easy_qwen35_4b"
+ },
+ "graph_bench_fp8smoke_img_think_hard_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_img_think_hard_internvl35_4b"
+ },
+ "graph_bench_fp8smoke_img_think_hard_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_img_think_hard_qwen35_4b"
+ },
+ "graph_bench_fp8smoke_img_think_medium_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_img_think_medium_internvl35_4b"
+ },
+ "graph_bench_fp8smoke_img_think_medium_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8smoke_img_think_medium_qwen35_4b"
+ },
+ "graph_bench_fp8think_easy_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8think_easy_internvl35_4b"
+ },
+ "graph_bench_fp8think_hard_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8think_hard_internvl35_4b"
+ },
+ "graph_bench_fp8think_medium_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_fp8think_medium_internvl35_4b"
+ },
+ "graph_bench_promptexp_v1_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_promptexp_v1_internvl35_4b"
+ },
+ "graph_bench_promptexp_v2_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_promptexp_v2_internvl35_4b"
+ },
+ "graph_bench_promptexp_v3_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_promptexp_v3_internvl35_4b"
+ },
+ "graph_bench_promptexp_v4_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_promptexp_v4_internvl35_4b"
+ },
+ "graph_bench_qwensmoke_nothink_coloring_hard_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_qwensmoke_nothink_coloring_hard_qwen35_4b"
+ },
+ "graph_bench_qwensmoke_nothink_hard_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_qwensmoke_nothink_hard_qwen35_4b"
+ },
+ "graph_bench_qwensmoke_think_coloring_hard_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_qwensmoke_think_coloring_hard_qwen35_4b"
+ },
+ "graph_bench_qwensmoke_think_hard_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_qwensmoke_think_hard_qwen35_4b"
+ },
+ "graph_bench_scram_nothink_easy_gemma4_e2b": {
+  "axis": "scram_img",
+  "axis_value": "nothink/easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_scram_nothink_easy_internvl35_4b": {
+  "axis": "scram_img",
+  "axis_value": "nothink/easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_scram_nothink_easy_qwen35_4b": {
+  "axis": "scram_img",
+  "axis_value": "nothink/easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_scram_nothink_hard_gemma4_e2b": {
+  "axis": "scram_img",
+  "axis_value": "nothink/hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_scram_nothink_hard_internvl35_4b": {
+  "axis": "scram_img",
+  "axis_value": "nothink/hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_scram_nothink_hard_qwen35_4b": {
+  "axis": "scram_img",
+  "axis_value": "nothink/hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_scram_nothink_medium_gemma4_e2b": {
+  "axis": "scram_img",
+  "axis_value": "nothink/medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_scram_nothink_medium_internvl35_4b": {
+  "axis": "scram_img",
+  "axis_value": "nothink/medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_scram_nothink_medium_qwen35_4b": {
+  "axis": "scram_img",
+  "axis_value": "nothink/medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_scram_think_easy_gemma4_e2b": {
+  "axis": "scram_img",
+  "axis_value": "think/easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_scram_think_easy_internvl35_4b": {
+  "axis": "scram_img",
+  "axis_value": "think/easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_scram_think_easy_qwen35_4b": {
+  "axis": "scram_img",
+  "axis_value": "think/easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_scram_think_hard_gemma4_e2b": {
+  "axis": "scram_img",
+  "axis_value": "think/hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_scram_think_hard_internvl35_4b": {
+  "axis": "scram_img",
+  "axis_value": "think/hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_scram_think_hard_qwen35_4b": {
+  "axis": "scram_img",
+  "axis_value": "think/hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_scram_think_medium_gemma4_e2b": {
+  "axis": "scram_img",
+  "axis_value": "think/medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_scram_think_medium_internvl35_4b": {
+  "axis": "scram_img",
+  "axis_value": "think/medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_scram_think_medium_qwen35_4b": {
+  "axis": "scram_img",
+  "axis_value": "think/medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_standard_easy_gemma4_e2b": {
+  "axis": "standard",
+  "axis_value": "easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_standard_easy_internvl35_4b": {
+  "axis": "standard",
+  "axis_value": "easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_standard_easy_qwen35_4b": {
+  "axis": "standard",
+  "axis_value": "easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_standard_hard_gemma4_e2b": {
+  "axis": "standard",
+  "axis_value": "hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_standard_hard_internvl35_4b": {
+  "axis": "standard",
+  "axis_value": "hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_standard_hard_qwen35_4b": {
+  "axis": "standard",
+  "axis_value": "hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_standard_medium_gemma4_e2b": {
+  "axis": "standard",
+  "axis_value": "medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_standard_medium_internvl35_4b": {
+  "axis": "standard",
+  "axis_value": "medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_standard_medium_qwen35_4b": {
+  "axis": "standard",
+  "axis_value": "medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_sweep_edges_gemma4_e2b": {
+  "axis": "sweep_edges",
+  "axis_value": "",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_sweep_edges_internvl35_4b": {
+  "axis": "sweep_edges",
+  "axis_value": "",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_sweep_edges_qwen35_4b": {
+  "axis": "sweep_edges",
+  "axis_value": "",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_sweep_nodes_gemma4_e2b": {
+  "axis": "sweep_nodes",
+  "axis_value": "",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_sweep_nodes_internvl35_4b": {
+  "axis": "sweep_nodes",
+  "axis_value": "",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_sweep_nodes_qwen35_4b": {
+  "axis": "sweep_nodes",
+  "axis_value": "",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_think_nothink_coloring_easy_gemma4_e2b": {
+  "axis": "thinking",
+  "axis_value": "nothink/coloring/easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_think_nothink_coloring_easy_internvl35_4b": {
+  "axis": "thinking",
+  "axis_value": "nothink/coloring/easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_think_nothink_coloring_easy_qwen35_4b": {
+  "axis": "thinking",
+  "axis_value": "nothink/coloring/easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_think_nothink_coloring_hard_gemma4_e2b": {
+  "axis": "thinking",
+  "axis_value": "nothink/coloring/hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_think_nothink_coloring_hard_internvl35_4b": {
+  "axis": "thinking",
+  "axis_value": "nothink/coloring/hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_think_nothink_coloring_hard_qwen35_4b": {
+  "axis": "thinking",
+  "axis_value": "nothink/coloring/hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_think_nothink_coloring_medium_gemma4_e2b": {
+  "axis": "thinking",
+  "axis_value": "nothink/coloring/medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_think_nothink_coloring_medium_internvl35_4b": {
+  "axis": "thinking",
+  "axis_value": "nothink/coloring/medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_think_nothink_coloring_medium_qwen35_4b": {
+  "axis": "thinking",
+  "axis_value": "nothink/coloring/medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_think_nothink_easy_gemma4_e2b": {
+  "axis": "thinking",
+  "axis_value": "nothink/easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_think_nothink_easy_internvl35_4b": {
+  "axis": "thinking",
+  "axis_value": "nothink/easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_think_nothink_easy_qwen35_4b": {
+  "axis": "thinking",
+  "axis_value": "nothink/easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_think_nothink_hard_gemma4_e2b": {
+  "axis": "thinking",
+  "axis_value": "nothink/hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_think_nothink_hard_internvl35_4b": {
+  "axis": "thinking",
+  "axis_value": "nothink/hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_think_nothink_hard_qwen35_4b": {
+  "axis": "thinking",
+  "axis_value": "nothink/hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_think_nothink_medium_gemma4_e2b": {
+  "axis": "thinking",
+  "axis_value": "nothink/medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_think_nothink_medium_internvl35_4b": {
+  "axis": "thinking",
+  "axis_value": "nothink/medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_think_nothink_medium_qwen35_4b": {
+  "axis": "thinking",
+  "axis_value": "nothink/medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_think_think_coloring_easy_gemma4_e2b": {
+  "axis": "thinking",
+  "axis_value": "think/coloring/easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_think_think_coloring_easy_internvl35_4b": {
+  "axis": "thinking",
+  "axis_value": "think/coloring/easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_think_think_coloring_easy_qwen35_4b": {
+  "axis": "thinking",
+  "axis_value": "think/coloring/easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_think_think_coloring_hard_gemma4_e2b": {
+  "axis": "thinking",
+  "axis_value": "think/coloring/hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_think_think_coloring_hard_internvl35_4b": {
+  "axis": "thinking",
+  "axis_value": "think/coloring/hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_think_think_coloring_hard_qwen35_4b": {
+  "axis": "thinking",
+  "axis_value": "think/coloring/hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_think_think_coloring_medium_gemma4_e2b": {
+  "axis": "thinking",
+  "axis_value": "think/coloring/medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_think_think_coloring_medium_internvl35_4b": {
+  "axis": "thinking",
+  "axis_value": "think/coloring/medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_think_think_coloring_medium_qwen35_4b": {
+  "axis": "thinking",
+  "axis_value": "think/coloring/medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_think_think_easy_gemma4_e2b": {
+  "axis": "thinking",
+  "axis_value": "think/easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_think_think_easy_internvl35_4b": {
+  "axis": "thinking",
+  "axis_value": "think/easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_think_think_easy_qwen35_4b": {
+  "axis": "thinking",
+  "axis_value": "think/easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_think_think_hard_gemma4_e2b": {
+  "axis": "thinking",
+  "axis_value": "think/hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_think_think_hard_internvl35_4b": {
+  "axis": "thinking",
+  "axis_value": "think/hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_think_think_hard_qwen35_4b": {
+  "axis": "thinking",
+  "axis_value": "think/hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_think_think_medium_gemma4_e2b": {
+  "axis": "thinking",
+  "axis_value": "think/medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_think_think_medium_internvl35_4b": {
+  "axis": "thinking",
+  "axis_value": "think/medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_think_think_medium_qwen35_4b": {
+  "axis": "thinking",
+  "axis_value": "think/medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_thinkadj500inc_nothink_easy_gemma4_e2b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_nothink_easy_gemma4_e2b"
+ },
+ "graph_bench_thinkadj500inc_nothink_easy_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_nothink_easy_internvl35_4b"
+ },
+ "graph_bench_thinkadj500inc_nothink_easy_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_nothink_easy_qwen35_4b"
+ },
+ "graph_bench_thinkadj500inc_nothink_hard_gemma4_e2b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_nothink_hard_gemma4_e2b"
+ },
+ "graph_bench_thinkadj500inc_nothink_hard_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_nothink_hard_internvl35_4b"
+ },
+ "graph_bench_thinkadj500inc_nothink_hard_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_nothink_hard_qwen35_4b"
+ },
+ "graph_bench_thinkadj500inc_nothink_medium_gemma4_e2b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_nothink_medium_gemma4_e2b"
+ },
+ "graph_bench_thinkadj500inc_nothink_medium_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_nothink_medium_internvl35_4b"
+ },
+ "graph_bench_thinkadj500inc_nothink_medium_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_nothink_medium_qwen35_4b"
+ },
+ "graph_bench_thinkadj500inc_think_easy_gemma4_e2b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_think_easy_gemma4_e2b"
+ },
+ "graph_bench_thinkadj500inc_think_easy_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_think_easy_internvl35_4b"
+ },
+ "graph_bench_thinkadj500inc_think_easy_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_think_easy_qwen35_4b"
+ },
+ "graph_bench_thinkadj500inc_think_hard_gemma4_e2b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_think_hard_gemma4_e2b"
+ },
+ "graph_bench_thinkadj500inc_think_hard_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_think_hard_internvl35_4b"
+ },
+ "graph_bench_thinkadj500inc_think_hard_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_think_hard_qwen35_4b"
+ },
+ "graph_bench_thinkadj500inc_think_medium_gemma4_e2b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_think_medium_gemma4_e2b"
+ },
+ "graph_bench_thinkadj500inc_think_medium_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_think_medium_internvl35_4b"
+ },
+ "graph_bench_thinkadj500inc_think_medium_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadj500inc_think_medium_qwen35_4b"
+ },
+ "graph_bench_thinkadj_nothink_easy_gemma4_e2b": {
+  "axis": "thinking_adj",
+  "axis_value": "nothink/easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_thinkadj_nothink_easy_internvl35_4b": {
+  "axis": "thinking_adj",
+  "axis_value": "nothink/easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_thinkadj_nothink_easy_qwen35_4b": {
+  "axis": "thinking_adj",
+  "axis_value": "nothink/easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_thinkadj_nothink_hard_gemma4_e2b": {
+  "axis": "thinking_adj",
+  "axis_value": "nothink/hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_thinkadj_nothink_hard_internvl35_4b": {
+  "axis": "thinking_adj",
+  "axis_value": "nothink/hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_thinkadj_nothink_hard_qwen35_4b": {
+  "axis": "thinking_adj",
+  "axis_value": "nothink/hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_thinkadj_nothink_medium_gemma4_e2b": {
+  "axis": "thinking_adj",
+  "axis_value": "nothink/medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_thinkadj_nothink_medium_internvl35_4b": {
+  "axis": "thinking_adj",
+  "axis_value": "nothink/medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_thinkadj_nothink_medium_qwen35_4b": {
+  "axis": "thinking_adj",
+  "axis_value": "nothink/medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_thinkadj_think_easy_gemma4_e2b": {
+  "axis": "thinking_adj",
+  "axis_value": "think/easy",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_thinkadj_think_easy_internvl35_4b": {
+  "axis": "thinking_adj",
+  "axis_value": "think/easy",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_thinkadj_think_easy_qwen35_4b": {
+  "axis": "thinking_adj",
+  "axis_value": "think/easy",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_thinkadj_think_hard_gemma4_e2b": {
+  "axis": "thinking_adj",
+  "axis_value": "think/hard",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_thinkadj_think_hard_internvl35_4b": {
+  "axis": "thinking_adj",
+  "axis_value": "think/hard",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_thinkadj_think_hard_qwen35_4b": {
+  "axis": "thinking_adj",
+  "axis_value": "think/hard",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_thinkadj_think_medium_gemma4_e2b": {
+  "axis": "thinking_adj",
+  "axis_value": "think/medium",
+  "model_short": "gemma4_e2b"
+ },
+ "graph_bench_thinkadj_think_medium_internvl35_4b": {
+  "axis": "thinking_adj",
+  "axis_value": "think/medium",
+  "model_short": "internvl35_4b"
+ },
+ "graph_bench_thinkadj_think_medium_qwen35_4b": {
+  "axis": "thinking_adj",
+  "axis_value": "think/medium",
+  "model_short": "qwen35_4b"
+ },
+ "graph_bench_thinkadjsmoke_nothink_hard_gemma4_e2b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadjsmoke_nothink_hard_gemma4_e2b"
+ },
+ "graph_bench_thinkadjsmoke_nothink_hard_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadjsmoke_nothink_hard_internvl35_4b"
+ },
+ "graph_bench_thinkadjsmoke_nothink_hard_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadjsmoke_nothink_hard_qwen35_4b"
+ },
+ "graph_bench_thinkadjsmoke_think_hard_gemma4_e2b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadjsmoke_think_hard_gemma4_e2b"
+ },
+ "graph_bench_thinkadjsmoke_think_hard_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadjsmoke_think_hard_internvl35_4b"
+ },
+ "graph_bench_thinkadjsmoke_think_hard_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinkadjsmoke_think_hard_qwen35_4b"
+ },
+ "graph_bench_thinksmoke2_think_gemma4_e2b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke2_think_gemma4_e2b"
+ },
+ "graph_bench_thinksmoke2_think_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke2_think_internvl35_4b"
+ },
+ "graph_bench_thinksmoke3_nothink_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke3_nothink_internvl35_4b"
+ },
+ "graph_bench_thinksmoke3_think_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke3_think_internvl35_4b"
+ },
+ "graph_bench_thinksmoke4_think_internvl35_4b_hard": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke4_think_internvl35_4b_hard"
+ },
+ "graph_bench_thinksmoke5_think_internvl35_4b_hard": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke5_think_internvl35_4b_hard"
+ },
+ "graph_bench_thinksmoke6_think_internvl35_4b_easy": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke6_think_internvl35_4b_easy"
+ },
+ "graph_bench_thinksmoke_nothink_gemma4_e2b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke_nothink_gemma4_e2b"
+ },
+ "graph_bench_thinksmoke_nothink_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke_nothink_internvl35_4b"
+ },
+ "graph_bench_thinksmoke_nothink_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke_nothink_qwen35_4b"
+ },
+ "graph_bench_thinksmoke_think_gemma4_e2b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke_think_gemma4_e2b"
+ },
+ "graph_bench_thinksmoke_think_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke_think_internvl35_4b"
+ },
+ "graph_bench_thinksmoke_think_qwen35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_thinksmoke_think_qwen35_4b"
+ },
+ "graph_bench_v1ab_easy_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_v1ab_easy_internvl35_4b"
+ },
+ "graph_bench_v1ab_hard_internvl35_4b": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "graph_bench_v1ab_hard_internvl35_4b"
+ },
+ "smoke_qwen35_4b_nothink": {
+  "axis": "unknown",
+  "axis_value": "",
+  "model_short": "smoke_qwen35_4b_nothink"
+ }
+}

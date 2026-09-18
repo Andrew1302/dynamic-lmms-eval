@@ -38,16 +38,16 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+# Sibling module: this file's directory is on sys.path both when run as a
+# script and when imported by the callers that insert tools/postprocess.
+import _families
+
 # --------------------------------------------------------------------------
 # Campaign spec: ordered (regex on bare job name) -> (campaign dir, leaf tmpl).
 # Bare name = job dir name with the leading "graph_bench_" stripped. First
 # match wins, so list the more specific prefixes first.
 # --------------------------------------------------------------------------
-MODELS = {
-    "internvl35_4b": "internvl",
-    "qwen35_4b": "qwen",
-    "gemma4_e2b": "gemma",
-}
+MODELS = _families.MODELS
 
 _DIFF = r"(?P<diff>easy|medium|hard)"
 _MODEL = r"(?P<model>[a-z0-9]+_[a-z0-9]+)"
@@ -56,34 +56,11 @@ _COL = r"(?:(?P<col>coloring)_)?"  # optional coloring-only job marker
 # Campaigns 01-09 are the PRE-FIX tree (render bug / fp8 blindness / default-chi
 # coloring); they stay on disk untouched as the archive. Everything fetched from
 # 2026-07-16 on files into the fresh 10+ tree so old and new results never mix.
-SPECS: list[tuple[re.Pattern, str, str]] = [
-    (re.compile(rf"^scram_(?P<arm>think|nothink)_{_COL}{_DIFF}_{_MODEL}$"),
-     "17_abl_scram", "{model}_{diff}_{arm}"),
-    (re.compile(rf"^thinkadj500inc_(?P<arm>think|nothink)_{_COL}{_DIFF}_{_MODEL}$"),
-     "16_abl_thinkadj", "{model}_{diff}_{arm}_inc"),
-    (re.compile(rf"^thinkadj_(?P<arm>think|nothink)_{_COL}{_DIFF}_{_MODEL}$"),
-     "16_abl_thinkadj", "{model}_{diff}_{arm}"),
-    (re.compile(rf"^think_(?P<arm>think|nothink)_{_COL}{_DIFF}_{_MODEL}$"),
-     "15_abl_think", "{model}_{diff}_{arm}"),
-    (re.compile(rf"^ablation_adjlist_{_COL}{_DIFF}_{_MODEL}$"),
-     "12_abl_adjlist", "{model}_{diff}"),
-    (re.compile(rf"^ablation_labels_(?P<style>letters|none)_{_COL}{_DIFF}_{_MODEL}$"),
-     "13_abl_labels", "{model}_{diff}_{style}"),
-    (re.compile(rf"^ablation_color_{_COL}{_DIFF}_{_MODEL}$"),
-     "14_abl_color", "{model}_{diff}"),
-    # Legacy job family (no longer generated): old dedicated coloring jobs
-    # still file into the legacy 03 dir if ever refetched.
-    (re.compile(rf"^coloring_{_DIFF}_{_MODEL}$"),
-     "03_coloring_chi", "{model}_{diff}"),
-    (re.compile(rf"^standard_{_DIFF}_{_MODEL}$"),
-     "10_standard", "{model}_{diff}"),
-    (re.compile(rf"^sweep_(?P<constraint>edges|nodes)_(?P<col>coloring)_{_MODEL}$"),
-     "11_sweep_size", "{model}_{constraint}"),
-    (re.compile(rf"^sweep_(?P<constraint>edges|nodes)_{_MODEL}$"),
-     "11_sweep_size", "{model}_{constraint}"),
-]
+# SPECS and SCRATCH_RE moved to _families.py so the filing rules and the
+# report's axis grouping cannot drift apart. Re-exported for importers.
+SPECS = [(f.pattern, f.campaign, f.leaf_tmpl) for f in _families.FAMILIES]
 
-SCRATCH_RE = re.compile(r"smoke|promptexp|fp8think|v1ab|gemmatok")
+SCRATCH_RE = _families.SCRATCH_RE
 
 TASK_FOLDER = {
     "directed_connectivity": "connectivity",
@@ -95,7 +72,7 @@ VARIANT_FOLDER = {"direct": "original", "disguise": "disguise"}
 _LEGACY_NOTE = ("PRE-FIX LEGACY ARCHIVE (superseded 2026-07-16 by the 10+ tree: "
                 "direct-render occlusion bug, fp8 vision blindness, default-chi "
                 "coloring). Do not mix with 10+ results. ")
-CAMPAIGN_DESC = {
+_LEGACY_CAMPAIGN_DESC = {
     # ---- legacy pre-fix tree (01-09): archive only, nothing new files here
     # (except 03, which still catches refetches of the retired coloring jobs).
     "01_standard": _LEGACY_NOTE + "Baseline benchmark, n=500/task.",
@@ -118,6 +95,10 @@ CAMPAIGN_DESC = {
     "16_abl_thinkadj": "Thinking x adjacency-list ablation. Both arms, n=100/task, all three tasks; _inc marks the deferred 400-sample increment (pool for n=500).",
     "17_abl_scram": "Scrambled ('no-info') image control + adjacency list. Both arms, 3 difficulties; Qwen + InternVL required, Gemma optional.",
 }
+
+# Post-fix campaigns describe themselves in the family registry, so a new
+# family needs no second entry here. The legacy 01-09 archive has no families.
+CAMPAIGN_DESC = {**_LEGACY_CAMPAIGN_DESC, **{f.campaign: f.description for f in _families.FAMILIES if f.description}}
 
 SAMPLES_RE = re.compile(r"^(?P<ts>\d{8}_\d{6})_samples_(?P<task>.+)\.jsonl$")
 
@@ -147,19 +128,16 @@ class JobPlan:
 def match_job(job_name: str):
     """Classify a job by name -> (campaign, leaf_tmpl, fields) or None.
 
-    Single source of truth shared with the generator and the image linker.
+    Thin adapter over the ``_families`` registry, which is the single source of
+    truth shared with batch_report.py and the job generator. The return shape is
+    kept for callers (the generator's drift guard unpacks it).
     ``job_name`` may include or omit the ``graph_bench_`` prefix.
     """
-    bare = job_name[len("graph_bench_"):] if job_name.startswith("graph_bench_") else job_name
-    if SCRATCH_RE.search(bare):
+    matched = _families.match_job(job_name)
+    if matched is None:
         return None
-    for rx, campaign, tmpl in SPECS:
-        m = rx.match(bare)
-        if m and m.groupdict().get("model", "") in MODELS:
-            fields = dict(m.groupdict())
-            fields["model"] = MODELS[fields["model"]]
-            return campaign, tmpl, fields
-    return None
+    family, fields = matched
+    return family.campaign, family.leaf_tmpl, fields
 
 
 def campaign_for_name(job_name: str) -> str:

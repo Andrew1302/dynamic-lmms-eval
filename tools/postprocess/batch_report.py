@@ -49,6 +49,7 @@ from _excel import (
     style_header_row,
     write_accuracy_cell,
 )
+import _families
 from _logs import SAMPLES_RE, SampleRow, iter_rows
 from compare_direct_disguise import (
     build_pair_rows,
@@ -62,145 +63,28 @@ from compare_direct_disguise import (
 # Job-id parsing
 # --------------------------------------------------------------------------- #
 
-# Order matters: more specific prefixes first so "labels_letters" wins over a
-# generic "labels" match.
-def _ablation_diff_prefixes() -> list[tuple[str, str, str]]:
-    """Difficulty-separated label/color ablation prefixes (n=100 campaign).
-
-    Each (style|color, difficulty) yields a conn+shortest_path job and a
-    coloring-only special-coloring job. These must precede the generic
-    ``graph_bench_ablation_labels_*`` / ``graph_bench_ablation_color_`` prefixes
-    so the difficulty lands in axis_value and model_short stays just the model.
-    """
-    out: list[tuple[str, str, str]] = []
-    diffs = ("easy", "medium", "hard")
-    for style in ("letters", "none"):
-        for d in diffs:
-            # coloring prefix is longer; order within a (style,d) is irrelevant
-            # (the two job families are disjoint) but keep coloring first.
-            out.append(
-                (f"graph_bench_ablation_labels_{style}_coloring_{d}_",
-                 "labels", f"{style}/coloring/{d}")
-            )
-            out.append(
-                (f"graph_bench_ablation_labels_{style}_{d}_",
-                 "labels", f"{style}/{d}")
-            )
-    for d in diffs:
-        out.append(
-            (f"graph_bench_ablation_color_coloring_{d}_", "color", f"coloring/{d}")
-        )
-        out.append(
-            (f"graph_bench_ablation_color_{d}_", "color", d)
-        )
-    return out
-
-
-def _thinking_diff_prefixes() -> list[tuple[str, str, str]]:
-    """Thinking-vs-no-thinking ablation prefixes (n=100 campaign).
-
-    Jobs are ``graph_bench_think_{arm}_{diff}_{model}`` (conn+shortest_path) and
-    ``graph_bench_think_{arm}_coloring_{diff}_{model}`` (special-coloring), for
-    ``arm in {think, nothink}``. Coloring prefix is listed first (it is longer)
-    so the difficulty lands in axis_value and model_short stays just the model.
-    """
-    out: list[tuple[str, str, str]] = []
-    for arm in ("think", "nothink"):
-        for d in ("easy", "medium", "hard"):
-            out.append(
-                (f"graph_bench_think_{arm}_coloring_{d}_",
-                 "thinking", f"{arm}/coloring/{d}")
-            )
-            out.append(
-                (f"graph_bench_think_{arm}_{d}_",
-                 "thinking", f"{arm}/{d}")
-            )
-    return out
-
-
-def _thinkadj_diff_prefixes() -> list[tuple[str, str, str]]:
-    """Thinking × adjacency-list combined ablation prefixes (n=100 campaign).
-
-    Jobs are ``graph_bench_thinkadj_{arm}_{diff}_{model}`` (conn+shortest_path)
-    and ``graph_bench_thinkadj_{arm}_coloring_{diff}_{model}`` (special-coloring)
-    — same layout as the pure thinking ablation but with the adjacency list in
-    the prompt. axis="thinking_adj" keeps them a distinct family in the report so
-    they don't blend with the image-only thinking jobs. Coloring prefix first (it
-    is longer) so the difficulty lands in axis_value, model stays the model.
-    """
-    out: list[tuple[str, str, str]] = []
-    for arm in ("think", "nothink"):
-        for d in ("easy", "medium", "hard"):
-            out.append(
-                (f"graph_bench_thinkadj_{arm}_coloring_{d}_",
-                 "thinking_adj", f"{arm}/coloring/{d}")
-            )
-            out.append(
-                (f"graph_bench_thinkadj_{arm}_{d}_",
-                 "thinking_adj", f"{arm}/{d}")
-            )
-    return out
-
-
-def _scram_diff_prefixes() -> list[tuple[str, str, str]]:
-    """Scrambled-image (no-image control) + thinking + adjacency-list prefixes.
-
-    Jobs are ``graph_bench_scram_think_{diff}_{model}`` (conn+shortest_path) and
-    ``graph_bench_scram_think_coloring_{diff}_{model}`` (special-coloring), think
-    arm only. axis="scram_img" keeps them distinct from the intact-image thinkadj
-    family so a report can put them side by side.
-    """
-    out: list[tuple[str, str, str]] = []
-    for arm in ("think", "nothink"):
-        for d in ("easy", "medium", "hard"):
-            out.append((f"graph_bench_scram_{arm}_coloring_{d}_", "scram_img", f"{arm}/coloring/{d}"))
-            out.append((f"graph_bench_scram_{arm}_{d}_", "scram_img", f"{arm}/{d}"))
-    return out
-
-
-_AXIS_PREFIXES: list[tuple[str, str, str]] = _scram_diff_prefixes() + _thinkadj_diff_prefixes() + _thinking_diff_prefixes() + _ablation_diff_prefixes() + [
-    # (prefix, axis, axis_value)
-    # Difficulty-separated standard runs — most specific first so the difficulty
-    # lands in axis_value and model_short stays just the model.
-    ("graph_bench_standard_easy_",           "standard",     "easy"),
-    ("graph_bench_standard_medium_",         "standard",     "medium"),
-    ("graph_bench_standard_hard_",           "standard",     "hard"),
-    ("graph_bench_standard_",                "standard",     ""),
-    # Coloring re-run (special-coloring), difficulty-separated like standard.
-    ("graph_bench_coloring_easy_",           "coloring",     "easy"),
-    ("graph_bench_coloring_medium_",         "coloring",     "medium"),
-    ("graph_bench_coloring_hard_",           "coloring",     "hard"),
-    ("graph_bench_coloring_",                "coloring",     ""),
-    ("graph_bench_ablation_labels_letters_", "labels",       "letters"),
-    ("graph_bench_ablation_labels_none_",    "labels",       "none"),
-    ("graph_bench_ablation_color_",          "color",        ""),
-    # Adjacency-list ablation, difficulty-separated like standard.
-    ("graph_bench_ablation_adjlist_easy_",   "adjlist",      "easy"),
-    ("graph_bench_ablation_adjlist_medium_", "adjlist",      "medium"),
-    ("graph_bench_ablation_adjlist_hard_",   "adjlist",      "hard"),
-    ("graph_bench_ablation_adjlist_",        "adjlist",      ""),
-    ("graph_bench_ablation_adjmatrix_",      "adjmatrix",    ""),
-    ("graph_bench_ablation_thinking_",       "thinking",     ""),
-    ("graph_bench_ablation_size_",           "model_size",   ""),
-    ("graph_bench_sweep_nodes_",             "sweep_nodes",  ""),
-    ("graph_bench_sweep_edges_",             "sweep_edges",  ""),
-]
+# Axis grouping comes from the family registry, which also drives the
+# organizer's filing rules. It previously lived here as ~20 literal prefix
+# strings built by four generator functions -- a second encoding of the same
+# fact, which had already drifted (thinkadj500inc had a filing rule but no
+# prefix, so all 18 of those jobs reported as axis="unknown").
 
 
 def parse_job_id(job_name: str) -> dict[str, str]:
     """Split a job name into ``axis``, ``axis_value``, ``model_short``.
 
-    Falls back to ``axis="unknown"`` for non-matching names so the report
-    still includes them (just unsorted/uncategorised).
+    Falls back to ``axis="unknown"`` for non-matching names so the report still
+    includes them (just unsorted/uncategorised).
     """
-    for prefix, axis, axis_value in _AXIS_PREFIXES:
-        if job_name.startswith(prefix):
-            return {
-                "axis": axis,
-                "axis_value": axis_value,
-                "model_short": job_name[len(prefix):],
-            }
-    return {"axis": "unknown", "axis_value": "", "model_short": job_name}
+    matched = _families.match_job(job_name)
+    if matched is None:
+        return {"axis": "unknown", "axis_value": "", "model_short": job_name}
+    family, fields = matched
+    return {
+        "axis": family.axis,
+        "axis_value": family.axis_value(fields),
+        "model_short": fields["model_raw"],
+    }
 
 
 # --------------------------------------------------------------------------- #
