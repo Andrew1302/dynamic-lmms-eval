@@ -53,8 +53,26 @@ LEFT = Alignment(horizontal="left", vertical="center")
 CENTER = Alignment(horizontal="center", vertical="center")
 
 
+def _resolve_job_dir(job: str) -> Path:
+    """Resolve a job's data dir. JOB_CAMPAIGN_PIN (e.g. "07_abl_think") pins to
+    one campaign's _jobs/ so a report stays consistent when the same job name is
+    filed in both a legacy pre-fix campaign and a partial post-fix rerun. Else
+    prefer flat remote_results/<job>, else the newest-mtime filed copy."""
+    pin = os.environ.get("JOB_CAMPAIGN_PIN")
+    if pin:
+        pinned = RES / pin / "_jobs" / job
+        if pinned.is_dir():
+            return pinned
+    flat = RES / job
+    if flat.is_dir():
+        return flat
+    filed = sorted(RES.glob(f"*/_jobs/{job}"),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+    return filed[0] if filed else flat
+
+
 def _latest_paths(job: str) -> list[Path]:
-    root = RES / job
+    root = _resolve_job_dir(job)
     paths = find_sample_jsonls(root)
     tss = sorted(
         {m.group(1) for p in paths if (m := re.match(r"(\d{8}_\d{6})", p.name))}

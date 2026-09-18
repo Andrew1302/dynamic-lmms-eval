@@ -43,10 +43,20 @@ def job_name(tier: str, arm: str, diff: str, model: str) -> str:
 
 
 def find_job_dir(job: str) -> Path | None:
-    for cand in (RESULTS / "_scratch" / job, RESULTS / job, RESULTS / "_smoke" / job):
-        if cand.is_dir():
-            return cand
-    return None
+    # A job may exist in several roots (flat just-fetched dir + a previously
+    # organized _scratch copy). Pick the one whose newest samples jsonl is
+    # freshest so a stale prior fetch never shadows the current run.
+    cands = [c for c in (RESULTS / "_scratch" / job, RESULTS / job,
+                         RESULTS / "_smoke" / job) if c.is_dir()]
+    if not cands:
+        return None
+
+    def freshness(d: Path) -> float:
+        js = [f for f in d.rglob("*_samples_*.jsonl")
+              if "/chunks/" not in f.as_posix()]
+        return max((f.stat().st_mtime for f in js), default=-1.0)
+
+    return max(cands, key=freshness)
 
 
 def latest_samples(job_dir: Path, task: str, variant: str) -> Path | None:

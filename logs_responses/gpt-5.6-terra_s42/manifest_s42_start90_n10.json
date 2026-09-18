@@ -1,0 +1,16 @@
+{
+  "model": "gpt-5.6-terra",
+  "seed": 42,
+  "start_index": 90,
+  "num_samples": 10,
+  "tasks": [
+    "coloring",
+    "directed_connectivity",
+    "shortest_path"
+  ],
+  "difficulties": [
+    "hard"
+  ],
+  "reasoning_effort": "medium",
+  "next_start_index": 100
+}

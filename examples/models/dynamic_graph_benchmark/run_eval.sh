@@ -217,6 +217,15 @@ case "$MODEL_PRETRAINED" in
         ;;
 esac
 
+# Large-GPU overrides. On the 12 GiB VMs these env vars are unset, so the
+# per-model defaults above stand. A conf (e.g. the c2d/RTX-5090 InternVL jobs)
+# may export VLLM_GPU_UTIL_OVERRIDE / VLLM_MAX_NUM_SEQS_OVERRIDE /
+# VLLM_MAX_MODEL_LEN_OVERRIDE to widen the KV cache + concurrency on a 32 GiB
+# card. Bounded on shared boxes so vllm never evicts a co-located process.
+VLLM_GPU_UTIL="${VLLM_GPU_UTIL_OVERRIDE:-$VLLM_GPU_UTIL}"
+VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN_OVERRIDE:-$VLLM_MAX_MODEL_LEN}"
+VLLM_MAX_NUM_SEQS="${VLLM_MAX_NUM_SEQS_OVERRIDE:-$VLLM_MAX_NUM_SEQS}"
+
 # Gemma-4's thinking output wraps reasoning in the special tokens
 # <|channel>thought ... <channel|>. Preserve them (skip_special_tokens=False) so
 # the task yaml's reasoning_tags can strip the channel block and isolate the

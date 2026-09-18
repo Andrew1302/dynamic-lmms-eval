@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-"""Local launcher for API-backed models (e.g. Gemini) on the dynamic graph benchmark.
+"""Local launcher for API-backed models (Gemini, OpenAI, Azure OpenAI) on the
+dynamic graph benchmark.
 
 This is the Windows-friendly local analogue of ``run_eval.sh``: it reuses the exact
 same dataset prep (``tools/prepare_dynamic_graph_benchmark.py``), the same task YAMLs,
@@ -7,22 +8,46 @@ and the same registered model wrappers + lmms-eval — but drops the VM-only mac
 (SSH deploy, ``ln -s`` symlink, ``accelerate launch``, chunking). API models need no
 GPU, so running them locally is both cheaper and simpler than a VM round-trip.
 
+Post-fix guarantees (these ship in the sibling ``dynamic-dataset`` renderer + this
+prepare, so a fresh local prep is automatically post-fix):
+  * occlusion-aware direct render + sp-map disambiguation (no absorbed edges);
+  * χ-controlled coloring is UNCONDITIONAL — every coloring dataset plants the
+    chromatic number linearly across {2, 3, 4} (sample i cycles 2→3→4), so the
+    answer distribution is exactly uniform. There is no flag to turn this off.
+The fp8 vision fix is irrelevant here (API models are not quantized).
+
 It writes the prepared dataset straight into the canonical path the task YAMLs load
 (``./dynamic_graph_benchmark_data``, ``load_from_disk: True``), so no symlink is needed.
 Difficulties are run sequentially: prepare -> eval -> prepare (overwrite) -> eval -> ...
 
-Usage (from the repo root, with the repo venv's python and GOOGLE_API_KEY set):
+Credentials are read from the repo ``.env`` (auto-loaded) or the environment.
+  * Gemini      (``--model gemini_api``): GOOGLE_API_KEY
+  * OpenAI      (``--model openai``):     OPENAI_API_KEY  [+ optional OPENAI_API_BASE]
+  * Azure OpenAI(``--model openai --azure``): AZURE_OPENAI_API_KEY,
+        AZURE_OPENAI_API_BASE (endpoint). The aboda-openai resource is the new
+        Azure OpenAI v1 API (serves at the endpoint ROOT, Bearer auth, no
+        api-version), so --azure just points the plain OpenAI client at that
+        endpoint + key — the classic /openai/deployments/…?api-version client
+        404s there. ``--model-version`` is the deployment name (e.g.
+        gpt-5.6-terra); keep "gpt-5" in it so the wrapper routes reasoning SKUs
+        correctly (drops temperature, uses max_completion_tokens).
 
-    # PowerShell:  $env:GOOGLE_API_KEY = "<key>"
-    .venv\\Scripts\\python examples/models/dynamic_graph_benchmark/run_local_api.py
+Usage (from the repo root, with the dedicated API venv's python — .venv-api,
+which holds the api-only stack: torch/transformers/openai/accelerate + the
+dynamic-dataset render deps, minus vllm):
 
-    # 1-sample smoke on a single difficulty (~4 API calls):
-    .venv\\Scripts\\python examples/models/dynamic_graph_benchmark/run_local_api.py \\
+    # Azure gpt-5.6-terra — 1-sample smoke on easy, all 3 standard tasks (~6 calls):
+    .venv-api\\Scripts\\python examples/models/dynamic_graph_benchmark/run_local_api.py \\
+        --model openai --azure --model-version gpt-5.6-terra \\
         --num-samples 1 --difficulties easy
 
-Defaults mirror the standard .conf (graph_bench_standard_*_*.conf): shortest_path,
-10 samples/difficulty, numeric labels, node color #AED6F1, straight edges, seed 42,
-model gemini_api / gemini-2.5-flash.
+    # Full standard ablation — 100 samples/diff × 3 diffs × 3 tasks × 2 surfaces:
+    .venv-api\\Scripts\\python examples/models/dynamic_graph_benchmark/run_local_api.py \\
+        --model openai --azure --model-version gpt-5.6-terra --num-samples 100
+
+Defaults mirror the standard campaign (coloring + directed_connectivity +
+shortest_path; numeric labels, node color #AED6F1, straight edges, seed 42,
+no adjacency list, no thinking).
 """
 
 from __future__ import annotations
@@ -33,10 +58,33 @@ import subprocess
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 # Repo root = three levels up from examples/models/dynamic_graph_benchmark/.
 REPO_ROOT = Path(__file__).resolve().parents[3]
 # The path the task YAMLs load via load_from_disk (see _default_template_yaml).
 CANONICAL_DATASET_DIR = "./dynamic_graph_benchmark_data"
+
+# Load the repo .env up front so the credential preflight below can see keys the
+# user dropped there (the model wrapper also calls load_dotenv(), but that fires
+# inside the eval subprocess — too late for our own fail-fast check).
+load_dotenv(REPO_ROOT / ".env")
+
+
+# Per-provider required env vars for the fail-fast preflight.
+#
+# NOTE ON AZURE: the aboda-openai resource is the *new Azure OpenAI v1 API* — it
+# serves inference at the endpoint root (POST {endpoint}/chat/completions with the
+# deployment name in the body), accepts Bearer auth, and needs no api-version.
+# The classic AzureOpenAI client (/openai/deployments/{dep}/...?api-version=) 404s
+# there. So --azure just points the *plain* OpenAI client at the Azure endpoint +
+# key (verified: Bearer + no api-version + root path → 200). Hence no
+# AZURE_OPENAI_API_VERSION requirement.
+_REQUIRED_ENV = {
+    "gemini": ("GOOGLE_API_KEY",),
+    "openai": ("OPENAI_API_KEY",),
+    "azure": ("AZURE_OPENAI_API_KEY", "AZURE_OPENAI_API_BASE"),
+}
 
 
 def _run(cmd: list[str]) -> None:
@@ -51,9 +99,11 @@ def _run(cmd: list[str]) -> None:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--model", default="gemini_api", help="lmms-eval --model registry name (default: gemini_api)")
-    p.add_argument("--model-version", default="gemini-2.5-flash", help="API model version passed as model_version= (default: gemini-2.5-flash)")
-    p.add_argument("--tasks", nargs="+", default=["shortest_path"], help="benchmark tasks (default: shortest_path). Each expands to _direct + _disguise subtasks.")
+    p.add_argument("--model", default="gemini_api", help="lmms-eval --model registry name (default: gemini_api; use 'openai' for OpenAI/Azure)")
+    p.add_argument("--model-version", default="gemini-2.5-flash", help="API model version / Azure deployment name passed as model_version= (default: gemini-2.5-flash)")
+    p.add_argument("--azure", action="store_true", help="route the openai model through Azure OpenAI (AzureOpenAI client + AZURE_OPENAI_* env). Implies --model openai.")
+    p.add_argument("--num-concurrent", type=int, default=None, help="in-flight request concurrency for the openai wrapper (num_concurrent=; default: wrapper default 32). Lower it if Azure returns 429s.")
+    p.add_argument("--tasks", nargs="+", default=["coloring", "directed_connectivity", "shortest_path"], help="benchmark tasks (default: the standard trio). Each expands to _direct + _disguise subtasks.")
     p.add_argument("--difficulties", nargs="+", default=["easy", "medium", "hard"], choices=["easy", "medium", "hard"], help="difficulties to run sequentially (default: easy medium hard)")
     p.add_argument("--num-samples", type=int, default=10, help="generations per task per difficulty (default: 10)")
     p.add_argument("--seed", type=int, default=42)
@@ -71,21 +121,66 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
 
-    # Fail fast before any (cost-incurring) dataset prep or API call.
-    if not os.environ.get("GOOGLE_API_KEY"):
-        print("[run_local_api] FATAL: GOOGLE_API_KEY is not set. In PowerShell: $env:GOOGLE_API_KEY = \"<key>\"", file=sys.stderr)
-        return 2
+    # --azure implies the openai wrapper; promote the default model so the user
+    # doesn't have to pass both flags.
+    if args.azure and args.model == "gemini_api":
+        args.model = "openai"
+
+    # Resolve which credential set this run needs, then fail fast (before any
+    # cost-incurring dataset prep or API call) if any required var is missing.
+    if args.model == "gemini_api":
+        provider = "gemini"
+    elif args.model == "openai":
+        provider = "azure" if args.azure else "openai"
+    else:
+        provider = None  # unknown/other wrapper: skip the preflight, let it self-report
+
+    if provider is not None:
+        missing = [v for v in _REQUIRED_ENV[provider] if not os.environ.get(v)]
+        if missing:
+            print(
+                f"[run_local_api] FATAL: {provider} run needs {', '.join(_REQUIRED_ENV[provider])} "
+                f"but these are unset: {', '.join(missing)}. Add them to {REPO_ROOT / '.env'} "
+                f"(or the environment).",
+                file=sys.stderr,
+            )
+            return 2
+
+    # Azure (new v1 API): drive the *plain* OpenAI client at the Azure endpoint
+    # root using Bearer auth. Feed the wrapper via the OPENAI_* env it already
+    # reads (base_url = OPENAI_API_BASE, api_key = OPENAI_API_KEY); keeps the key
+    # out of --model_args / logs. These propagate to the eval subprocess via
+    # os.environ, and load_dotenv() there won't clobber them (.env has no OPENAI_*).
+    if provider == "azure":
+        os.environ["OPENAI_API_KEY"] = os.environ["AZURE_OPENAI_API_KEY"]
+        os.environ["OPENAI_API_BASE"] = os.environ["AZURE_OPENAI_API_BASE"].rstrip("/")
+
+    if args.azure and "gpt-5" not in args.model_version and not any(k in args.model_version for k in ("o1", "o3", "o4")):
+        print(
+            f"[run_local_api] WARNING: model_version='{args.model_version}' has no reasoning marker "
+            "(gpt-5/o1/o3/o4); the openai wrapper will send temperature+max_tokens, which reasoning "
+            "SKUs reject. For gpt-5.6-terra keep 'gpt-5' in the deployment name.",
+            file=sys.stderr,
+        )
 
     py = sys.executable
     variants = ("direct", "disguise")
     lmms_tasks = ",".join(f"dynamic_graph_benchmark_{t}_{v}" for t in args.tasks for v in variants)
+
+    # lmms-eval --model_args (comma-separated key=value). base_url + api_key come
+    # from OPENAI_* env (set above for Azure), NOT here — so no secret hits the
+    # CLI/logs. num_concurrent only when explicitly overridden.
+    model_arg_parts = [f"model_version={args.model_version}"]
+    if args.num_concurrent is not None:
+        model_arg_parts.append(f"num_concurrent={args.num_concurrent}")
+    model_args = ",".join(model_arg_parts)
 
     # A compact, filesystem-safe tag for the model version (e.g. gemini-2.5-flash -> gemini25flash).
     model_tag = args.model_version.replace("-", "").replace(".", "").replace("/", "_")
     tasks_tag = "_".join(args.tasks)
     job_prefix = args.job_prefix or f"local_{model_tag}_{tasks_tag}"
 
-    print(f"[run_local_api] model={args.model} version={args.model_version}")
+    print(f"[run_local_api] model={args.model} version={args.model_version} provider={provider} model_args={model_args}")
     print(f"[run_local_api] tasks={args.tasks} -> {lmms_tasks}")
     print(f"[run_local_api] difficulties={args.difficulties} num_samples={args.num_samples}")
     print(f"[run_local_api] repo_root={REPO_ROOT}")
@@ -118,7 +213,7 @@ def main() -> int:
         eval_args = [
             py, "-m", "lmms_eval",
             "--model", args.model,
-            "--model_args", f"model_version={args.model_version}",
+            "--model_args", model_args,
             "--tasks", lmms_tasks,
             "--batch_size", str(args.batch_size),
             "--limit", str(args.num_samples),  # belt-and-suspenders cap on docs evaluated

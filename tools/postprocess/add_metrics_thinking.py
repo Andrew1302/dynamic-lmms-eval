@@ -56,6 +56,24 @@ CENTER = Alignment(horizontal="center", vertical="center")
 _TS_RE = re.compile(r"^(\d{8}_\d{6})")
 
 
+def _resolve_job_dir(base: str) -> Path | None:
+    """Resolve a job's data dir. A JOB_CAMPAIGN_PIN env var (e.g. "07_abl_think")
+    pins resolution to one campaign's _jobs/ — needed when the same job name is
+    filed in both a legacy pre-fix campaign and a partial post-fix rerun, so the
+    report stays consistent to ONE campaign. Else prefer a flat remote_results/<base>
+    (fresh fetch), else the newest-mtime filed copy under any campaign tree."""
+    pin = os.environ.get("JOB_CAMPAIGN_PIN")
+    if pin:
+        pinned = RES / pin / "_jobs" / base
+        return pinned if pinned.is_dir() else None
+    flat = RES / base
+    if flat.is_dir():
+        return flat
+    filed = sorted(RES.glob(f"*/_jobs/{base}"),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+    return filed[0] if filed else None
+
+
 def _job_dirs() -> list[Path]:
     dirs = []
     for arm in ARMS:
@@ -63,8 +81,8 @@ def _job_dirs() -> list[Path]:
             for model in MODELS:
                 for base in (f"graph_bench_think_{arm}_coloring_{d}_{model}",
                              f"graph_bench_think_{arm}_{d}_{model}"):
-                    p = RES / base
-                    if p.is_dir():
+                    p = _resolve_job_dir(base)
+                    if p is not None:
                         dirs.append(p)
     return dirs
 

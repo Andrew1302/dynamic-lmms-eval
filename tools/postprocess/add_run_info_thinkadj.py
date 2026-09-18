@@ -53,8 +53,20 @@ LEFT = Alignment(horizontal="left", vertical="center")
 CENTER = Alignment(horizontal="center", vertical="center")
 
 
+def _resolve_job_dir(job: str) -> Path:
+    """Mirror lib/common.sh::job_data_dir: prefer a flat remote_results/<job>
+    (fresh fetch), else the newest-mtime filed copy under a campaign tree
+    remote_results/NN_campaign/_jobs/<job> (post-organize)."""
+    flat = RES / job
+    if flat.is_dir():
+        return flat
+    filed = sorted(RES.glob(f"*/_jobs/{job}"),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+    return filed[0] if filed else flat
+
+
 def _latest_paths(job: str) -> list[Path]:
-    root = RES / job
+    root = _resolve_job_dir(job)
     paths = find_sample_jsonls(root)
     tss = sorted(
         {m.group(1) for p in paths if (m := re.match(r"(\d{8}_\d{6})", p.name))}

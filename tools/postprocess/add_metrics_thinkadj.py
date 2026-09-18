@@ -56,6 +56,19 @@ CENTER = Alignment(horizontal="center", vertical="center")
 _TS_RE = re.compile(r"^(\d{8}_\d{6})")
 
 
+def _resolve_job_dir(base: str) -> Path | None:
+    """Mirror lib/common.sh::job_data_dir — a job may live flat under
+    remote_results/<base> (fresh fetch) or filed under a campaign tree at
+    remote_results/NN_campaign/_jobs/<base> (post-organize). Prefer flat, else
+    the newest-mtime filed copy (so the post-fix 10+ tree wins over legacy)."""
+    flat = RES / base
+    if flat.is_dir():
+        return flat
+    filed = sorted(RES.glob(f"*/_jobs/{base}"),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+    return filed[0] if filed else None
+
+
 def _job_dirs() -> list[Path]:
     dirs = []
     for arm in ARMS:
@@ -63,8 +76,8 @@ def _job_dirs() -> list[Path]:
             for model in MODELS:
                 for base in (f"graph_bench_thinkadj_{arm}_coloring_{d}_{model}",
                              f"graph_bench_thinkadj_{arm}_{d}_{model}"):
-                    p = RES / base
-                    if p.is_dir():
+                    p = _resolve_job_dir(base)
+                    if p is not None:
                         dirs.append(p)
     return dirs
 
