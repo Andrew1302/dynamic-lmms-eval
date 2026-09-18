@@ -9,6 +9,7 @@ from prompting.templates._cot import cot_user_text
 
 class ZeroShotCoT(PromptTemplate):
     id = "cot_zeroshot_v1"
+    expects_reasoning = True
 
     def answer_spec(self, task: str) -> AnswerSpec:
         return cot_answer_spec(task)

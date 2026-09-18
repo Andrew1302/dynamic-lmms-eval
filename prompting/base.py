@@ -86,6 +86,12 @@ class PromptTemplate(ABC):
     id: str
     version: int = 1
 
+    # True when the template asks the model to reason before answering. Some
+    # models carry a profile-level "answer tersely" directive for their
+    # non-reasoning arm; it must not be applied on top of a template that is
+    # asking for a chain of thought, or the two instructions contradict.
+    expects_reasoning: bool = False
+
     # --- the four things a subclass defines -------------------------------
     def system(self, doc: dict) -> str | None:
         """System message for this doc, or None for no system turn."""

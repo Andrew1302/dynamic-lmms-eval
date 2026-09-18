@@ -61,6 +61,7 @@ def load_exemplars(task: str, variant: str) -> tuple[Exemplar, ...]:
 
 class FewShotImageCoT(PromptTemplate):
     id = "cot_fewshot_img_v1"
+    expects_reasoning = True
 
     def answer_spec(self, task: str) -> AnswerSpec:
         return cot_answer_spec(task)
