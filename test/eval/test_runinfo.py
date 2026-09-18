@@ -128,3 +128,38 @@ def test_cli_rejects_an_unknown_family():
 
     with pytest.raises(SystemExit):
         add_run_info.main(["--family", "nope", "--xlsx", "x.xlsx"])
+
+
+# ==========================================================================
+# metrics consolidation
+# ==========================================================================
+def test_metrics_families_are_registered():
+    import add_metrics
+
+    assert sorted(add_metrics.FAMILIES) == ["think", "thinkadj"]
+    for prefix, title in add_metrics.FAMILIES.values():
+        assert prefix.startswith("graph_bench_")
+        assert "quality metrics" in title
+
+
+def test_the_replaced_metrics_scripts_are_gone():
+    post = REPO / "tools" / "postprocess"
+    for gone in ("add_metrics_thinking.py", "add_metrics_thinkadj.py"):
+        assert not (post / gone).exists(), f"{gone} should have been replaced by add_metrics.py"
+    assert (post / "add_metrics.py").exists()
+
+
+def test_metrics_cli_rejects_an_unknown_family():
+    import add_metrics
+
+    with pytest.raises(SystemExit):
+        add_metrics.main(["--family", "nope", "--xlsx", "x.xlsx"])
+
+
+def test_verify_thinking_uses_the_production_parser():
+    """It used to read _normalize off the task utils module; that moved into
+    prompting.answers, which briefly left this (and add_metrics) broken."""
+    import verify_thinking
+
+    assert verify_thinking._normalize("The chromatic number is 4.", "coloring") == "4"
+    assert verify_thinking._normalize("A: Yes", "directed_connectivity") == "yes"

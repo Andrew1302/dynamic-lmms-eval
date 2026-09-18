@@ -104,8 +104,9 @@ def add_runinfo(fam, out_xlsx, asm_family):
 def add_metrics(fam, out_xlsx, asm_family):
     mk = fam.get("metrics")
     if not mk: return
-    mod = importlib.import_module(f"add_metrics_{mk}")
+    mod = importlib.import_module("add_metrics")
     mod.RES = asm_family
+    mod.JOB_PREFIX, mod.TITLE = mod.FAMILIES[mk]
     wb = openpyxl.load_workbook(out_xlsx)
     mod.build_metrics(wb)
     wb.save(out_xlsx)

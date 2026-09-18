@@ -10,7 +10,7 @@ reads the RAW ``resps`` (pre-strip) alongside ``filtered_resps`` (post-strip) â€
 the evaluator keeps ``resps`` only when it differs from ``filtered_resps``, i.e.
 exactly when a reasoning block was stripped (evaluator.py:1122,
 evaluation_tracker.py:280), and falls back to ``filtered_resps`` otherwise. It
-reuses the PRODUCTION ``strip_reasoning_tags`` + task ``_normalize`` so the
+reuses the PRODUCTION ``strip_reasoning_tags`` + ``prompting.answers`` so the
 verdict matches what scoring actually did. Reasoning presence is detected from
 the raw text (the vllm wrapper never populates ``token_counts.reasoning_tokens``,
 so token counts are unavailable for Qwen3.5 / Gemma-4).
@@ -73,9 +73,18 @@ def _load_by_path(mod_name: str, rel_path: str):
 
 _ensure_loguru_stub()
 _reasoning = _load_by_path("_dgb_reasoning", "lmms_eval/api/reasoning.py")
-_utils = _load_by_path("_dgb_utils", "lmms_eval/tasks/dynamic_graph_benchmark/utils.py")
 strip_reasoning_tags = _reasoning.strip_reasoning_tags
-_normalize = _utils._normalize
+
+# The answer parser moved out of the task utils into the prompting package, so
+# that a template's instruction and the parser reading its replies live in one
+# object. This is still the PRODUCTION parser (no copy = no drift); it is just
+# a plain import now instead of a by-path load of the task module.
+sys.path.insert(0, str(_REPO_ROOT))
+from prompting.answers import default_answer_spec  # noqa: E402
+
+
+def _normalize(text: str, task: str) -> str:
+    return default_answer_spec(task).parse(text)
 
 _DEFAULT_TAGS = [["<think>", "</think>"]]
 _MODEL_SHORTS = ("internvl35_4b", "qwen35_4b", "gemma4_e2b")

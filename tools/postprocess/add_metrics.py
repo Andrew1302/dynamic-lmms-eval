@@ -1,26 +1,18 @@
-"""Add a ``metrics`` sheet to the thinking-ablation _paper xlsx.
+"""Quality metrics sheet for the thinking-family ablations.
 
-Documents the trust/quality metrics behind the accuracy numbers, straight in the
-workbook so the paper file is self-contained. Reuses the PRODUCTION diagnosis
-from ``verify_thinking`` (same strip_reasoning_tags + _normalize the scorer
-uses), so nothing drifts.
+Replaces add_metrics_{thinking,thinkadj}.py, which differed in a job prefix, a
+title, and a job-dir rule -- thinking's returned None when JOB_CAMPAIGN_PIN
+missed, thinkadj's fell through to a flat fetch, and neither matched
+lib/common.sh::job_data_dir. There is one rule here: flat fetch first, then the
+newest filed copy.
 
-Per (model, arm) it reports: n, reasoning-emitted %, truncated % (reasoning
-never closed → answer lost), answer-isolated %, extract=score %, accuracy. Then
-a per-job token-usage table (median / p90 / max generated tokens + truncation).
-
-Crucially it uses only the **latest merged run per job** (newest timestamp among
-the non-chunk sample files), matching what 07_batch_report.sh reports — so the
-Gemma coloring reruns are used and stale earlier-timestamp samples in the same
-folder are ignored (aggregating the whole folder blends runs and misleads).
-
-Usage:
-    python tools/postprocess/add_metrics_thinking.py <xlsx_path>
+    python tools/postprocess/add_metrics.py --family think --xlsx report.xlsx
 """
 
 from __future__ import annotations
 
 import json
+import argparse
 import os
 import re
 import sys
@@ -40,6 +32,13 @@ from _logs import SAMPLES_RE, find_sample_jsonls  # noqa: E402
 REPO = _HERE.parents[1]
 RES = REPO / "remote_results"
 
+# Set by main(); the only things that differed between the two scripts.
+FAMILIES = {
+    "think": ("graph_bench_think_", "Thinking-ablation quality metrics (latest run per job)"),
+    "thinkadj": ("graph_bench_thinkadj_", "Thinking × adjacency-list ablation quality metrics (latest run per job)"),
+}
+JOB_PREFIX, TITLE = FAMILIES["think"]
+
 MODELS = ["internvl35_4b", "gemma4_e2b", "qwen35_4b"]
 ARMS = ["nothink", "think"]
 
@@ -57,15 +56,15 @@ _TS_RE = re.compile(r"^(\d{8}_\d{6})")
 
 
 def _resolve_job_dir(base: str) -> Path | None:
-    """Mirror lib/common.sh::job_data_dir — a job may live flat under
-    remote_results/<base> (fresh fetch) or filed under a campaign tree at
-    remote_results/NN_campaign/_jobs/<base> (post-organize). Prefer flat, else
-    the newest-mtime filed copy (so the post-fix 10+ tree wins over legacy)."""
+    """Flat fetch first, else the newest filed copy; None when absent.
+
+    The two scripts this replaces disagreed here: one returned None as soon as
+    JOB_CAMPAIGN_PIN missed, the other ignored the variable entirely.
+    """
     flat = RES / base
     if flat.is_dir():
         return flat
-    filed = sorted(RES.glob(f"*/_jobs/{base}"),
-                   key=lambda p: p.stat().st_mtime, reverse=True)
+    filed = sorted(RES.glob(f"*/_jobs/{base}"), key=lambda p: p.stat().st_mtime, reverse=True)
     return filed[0] if filed else None
 
 
@@ -74,8 +73,7 @@ def _job_dirs() -> list[Path]:
     for arm in ARMS:
         for d in DIFFS:
             for model in MODELS:
-                for base in (f"graph_bench_thinkadj_{arm}_coloring_{d}_{model}",
-                             f"graph_bench_thinkadj_{arm}_{d}_{model}"):
+                for base in (f"{JOB_PREFIX}{arm}_coloring_{d}_{model}", f"{JOB_PREFIX}{arm}_{d}_{model}"):
                     p = _resolve_job_dir(base)
                     if p is not None:
                         dirs.append(p)
@@ -137,16 +135,18 @@ def build_metrics(wb: openpyxl.Workbook) -> None:
     ws = wb.create_sheet("metrics", idx)
 
     r = 1
-    ws.cell(r, 1, "Thinking × adjacency-list ablation quality metrics (latest run per job)").font = TITLE_FONT
+    ws.cell(r, 1, TITLE).font = TITLE_FONT
     r += 2
     ws.cell(r, 1, f"reasoning_tags = {tags}").font = KEY_FONT
     r += 2
 
     # --- per (model, arm) ----------------------------------------------------
-    hdr = ["model", "arm", "n", "reasoning_emitted_%", "truncated_%",
-           "answer_isolated_%", "extract=score_%", "accuracy"]
+    hdr = ["model", "arm", "n", "reasoning_emitted_%", "truncated_%", "answer_isolated_%", "extract=score_%", "accuracy"]
     for j, h in enumerate(hdr, 1):
-        c = ws.cell(r, j, h); c.fill = SECTION_FILL; c.font = SECTION_FONT; c.alignment = CENTER
+        c = ws.cell(r, j, h)
+        c.fill = SECTION_FILL
+        c.font = SECTION_FONT
+        c.alignment = CENTER
     r += 1
     groups: dict[tuple[str, str], list[vt.Diag]] = defaultdict(list)
     for d in diags:
@@ -162,8 +162,7 @@ def build_metrics(wb: openpyxl.Workbook) -> None:
             iso = _pct(sum(x.answer_isolated for x in rows), n)
             ext = _pct(sum(x.consistent for x in rows), n)
             acc = round(sum(x.score for x in rows) / n, 3)
-            vals = [model, arm, n,
-                    "—" if reason is None else reason, trunc, iso, ext, acc]
+            vals = [model, arm, n, "—" if reason is None else reason, trunc, iso, ext, acc]
             for j, v in enumerate(vals, 1):
                 cc = ws.cell(r, j, v)
                 cc.alignment = LEFT if j <= 2 else CENTER
@@ -175,7 +174,10 @@ def build_metrics(wb: openpyxl.Workbook) -> None:
     r += 1
     hdr2 = ["job", "arm", "n", "tok_median", "tok_p90", "tok_max", "truncated_%"]
     for j, h in enumerate(hdr2, 1):
-        c = ws.cell(r, j, h); c.fill = SECTION_FILL; c.font = SECTION_FONT; c.alignment = CENTER
+        c = ws.cell(r, j, h)
+        c.fill = SECTION_FILL
+        c.font = SECTION_FONT
+        c.alignment = CENTER
     r += 1
     byjob: dict[str, list[vt.Diag]] = defaultdict(list)
     for d in diags:
@@ -187,20 +189,22 @@ def build_metrics(wb: openpyxl.Workbook) -> None:
         n = len(rows)
         trunc = _pct(sum(x.no_close_tag for x in rows), n) if arm == "think" else 0.0
         short = label
-        for pfx in ("graph_bench_thinkadj_",):
+        for pfx in (JOB_PREFIX,):
             if short.startswith(pfx):
-                short = short[len(pfx):]
-        vals = [short, arm, n,
-                _pctl(toks, 0.5), _pctl(toks, 0.9), max(toks) if toks else 0, trunc]
+                short = short[len(pfx) :]
+        vals = [short, arm, n, _pctl(toks, 0.5), _pctl(toks, 0.9), max(toks) if toks else 0, trunc]
         for j, v in enumerate(vals, 1):
             cc = ws.cell(r, j, v)
             cc.alignment = LEFT if j == 1 else CENTER
         r += 1
 
-    ws.cell(r + 1, 1,
-            "reasoning_emitted = raw has a closed reasoning block; truncated = think arm, never "
-            "closed (answer lost); answer_isolated = filtered text carries no reasoning tag; "
-            "extract=score = re-normalizing filtered reproduces the logged score.").font = Font(italic=True)
+    ws.cell(
+        r + 1,
+        1,
+        "reasoning_emitted = raw has a closed reasoning block; truncated = think arm, never "
+        "closed (answer lost); answer_isolated = filtered text carries no reasoning tag; "
+        "extract=score = re-normalizing filtered reproduces the logged score.",
+    ).font = Font(italic=True)
 
     widths = {"A": 46, "B": 10, "C": 7, "D": 20, "E": 14, "F": 16, "G": 15, "H": 10}
     for col, w in widths.items():
@@ -208,17 +212,22 @@ def build_metrics(wb: openpyxl.Workbook) -> None:
     ws.freeze_panes = "A2"
 
 
-def main() -> int:
-    if len(sys.argv) != 2:
-        print(f"usage: {sys.argv[0]} <xlsx_path>", file=sys.stderr)
-        return 2
-    path = Path(sys.argv[1])
-    wb = openpyxl.load_workbook(path)
+def main(argv: list[str] | None = None) -> int:
+    global JOB_PREFIX, TITLE, RES
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--family", required=True, choices=sorted(FAMILIES))
+    ap.add_argument("--xlsx", required=True, type=Path)
+    ap.add_argument("--results-root", type=Path, default=RES)
+    args = ap.parse_args(argv)
+
+    JOB_PREFIX, TITLE = FAMILIES[args.family]
+    RES = args.results_root
+    wb = openpyxl.load_workbook(args.xlsx)
     build_metrics(wb)
-    wb.save(path)
-    print(f"[thinking] added metrics -> {path}")
+    wb.save(args.xlsx)
+    print(f"[metrics] {args.family} -> {args.xlsx}")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
