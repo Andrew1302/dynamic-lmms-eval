@@ -33,6 +33,9 @@ RES = REPO / "remote_results"
 sys.path.insert(0, str(TOOLS))
 import openpyxl
 
+import _runinfo
+from _runinfo_specs import RUN_INFO_SPECS
+
 # ---- families ---------------------------------------------------------------
 # name, manifest, campaign, runinfo kind + params, metrics kind, split
 FAMS = [
@@ -47,36 +50,7 @@ FAMS = [
 ]
 
 # injected config text for standard/adjlist (no shipped generator) -------------
-import add_run_info_ablation as abl
-_COMMON_TAIL = [
-    ("Coloring construction", "special-coloring: chromatic number planted uniformly over {2,3,4}"),
-    ("conn / shortest_path construction", "standard difficulty presets"),
-    ("Edge-count convention", "directed_connectivity = directed out-edges; coloring/shortest_path = undirected"),
-    ("Graphs across models", "identical per (task, difficulty) — same seeds; ranges below from one model"),
-]
-def _std_config(_arm):
-    return [("Models", ", ".join(abl.MODELS)), ("Tasks", ", ".join(abl.TASKS)),
-            ("Difficulties", "easy, medium, hard (pure per-difficulty)"),
-            ("Generations per task per difficulty", f"{abl.SPD}  (→ {abl.SPD} direct + {abl.SPD} disguise)"),
-            ("Setting", "baseline / standard run (no ablation)"),
-            ("Prompt augmentation", "none — image only (no adjacency list)"),
-            ("Render settings", "label_style=numeric, node_color=#AED6F1, edge_style=straight"), *_COMMON_TAIL]
-def _adj_config(_arm):
-    return [("Models", ", ".join(abl.MODELS)), ("Tasks", ", ".join(abl.TASKS)),
-            ("Difficulties", "easy, medium, hard (pure per-difficulty)"),
-            ("Generations per task per difficulty", f"{abl.SPD}  (→ {abl.SPD} direct + {abl.SPD} disguise)"),
-            ("Ablated setting", "adjacency list injected into the prompt (textual edge list alongside the image)"),
-            ("Baseline for comparison", "standard run — image only, no adjacency list"),
-            ("Prompt augmentation", "adjacency list included (image + text edge list)"),
-            ("Render settings", "label_style=numeric, node_color=#AED6F1, edge_style=straight"), *_COMMON_TAIL]
 
-STD_ARM = {"title": "Standard baseline benchmark — run configuration",
-           "job_base": "graph_bench_standard",
-           "ablated": ("Setting", "baseline"), "render": ("Render", "standard")}
-ADJ_ARM = {"title": "Adjacency-list ablation — run configuration",
-           "job_base": "graph_bench_ablation_adjlist",
-           "ablated": ("Ablated setting", "adjacency list in prompt"),
-           "render": ("Render", "standard")}
 
 def uv(*args):
     r = subprocess.run(args, capture_output=True, text=True)
@@ -101,32 +75,30 @@ def batch_report(tsv, out_xlsx, name):
         raise SystemExit(f"batch_report FAILED ({name}):\n{r.stdout}\n{r.stderr}")
     return nd
 
+
 def add_runinfo(fam, out_xlsx, asm_family):
+    """Write the run_info sheet from the family registry.
+
+    This used to mutate module globals on the add_run_info_* scripts (RES, SPD,
+    ARMS, _config_rows) and inject configuration prose that existed in no file,
+    which had already drifted from add_full_run_info.py's copy of the same text.
+    All four are now parameters; the prose lives in _runinfo_specs.py.
+    """
     kind = fam["ri"][0]
+    spec_key = {"std": "standard", "adj": "adjlist", "abl": "ablation_color",
+                "thinking": "think", "thinkadj": "thinkadj"}.get(kind)
+    if kind == "abl_split":
+        spec_key = f"ablation_{fam['_arm']}"
+
     wb = openpyxl.load_workbook(out_xlsx)
-    if kind in ("std","adj","abl","abl_split"):
-        abl.RES = asm_family
-        orig_spd = abl.SPD; abl.SPD = fam.get("spd",100)
-        orig_cfg = abl._config_rows
-        try:
-            if kind == "std":
-                abl.ARMS["standard"] = STD_ARM
-                abl._config_rows = _std_config; abl.build_run_info("standard", wb)
-            elif kind == "adj":
-                abl.ARMS["adjlist"] = ADJ_ARM
-                abl._config_rows = _adj_config; abl.build_run_info("adjlist", wb)
-            elif kind == "abl":
-                abl.build_run_info(fam["ri"][1], wb)      # color
-            elif kind == "abl_split":
-                abl.build_run_info(fam["_arm"], wb)        # letters|none
-        finally:
-            abl.SPD = orig_spd; abl._config_rows = orig_cfg
-    elif kind == "thinking":
-        thk = importlib.import_module("add_run_info_thinking"); thk.RES = asm_family; thk.build_run_info(wb)
-    elif kind == "thinkadj":
-        tj = importlib.import_module("add_run_info_thinkadj"); tj.RES = asm_family; tj.build_run_info(wb)
+    if spec_key:
+        _runinfo.build_run_info(wb, RUN_INFO_SPECS[spec_key], results_root=Path(asm_family))
     elif kind == "sweep":
-        sw = importlib.import_module("add_run_info_sweep"); sw.RES = asm_family; sw.build_run_info(fam["ri"][1], wb)
+        # sweep sources coloring and conn/shortest_path rows from different
+        # jobs, so it keeps its own builder (see tools/postprocess/add_run_info.py).
+        sw = importlib.import_module("add_run_info_sweep")
+        sw.RES = asm_family
+        sw.build_run_info(fam["ri"][1], wb)
     wb.save(out_xlsx)
 
 def add_metrics(fam, out_xlsx, asm_family):
