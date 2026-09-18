@@ -120,6 +120,23 @@ class PromptTemplate(ABC):
         """
         return f"{self.answer_spec(doc['task']).instruction()}\n{body}"
 
+    # Minimum context window this template's prompt needs, when that is larger
+    # than the models' configured windows. None means "an ordinary prompt" -- do
+    # not guess a size. Per-image token counts vary with the render and the
+    # processor, and a fabricated estimate rejects configurations that have
+    # demonstrably run (Gemma's think arm lives inside a 16384 window).
+    # Set this only from a MEASURED prompt length.
+    min_window: int | None = None
+
+    def max_images(self) -> int:
+        """Most images this template ever puts in one request.
+
+        vllm rejects a request carrying more images than `limit_mm_per_prompt`
+        allows, so the engine limit has to follow the template rather than being
+        pinned at 1 -- which is what made few-shot exemplars unrunnable.
+        """
+        return max((sum(len(turn.images) for turn in self.turns(doc)) for doc in CANONICAL_DOCS), default=1)
+
     def fingerprint(self) -> str:
         """Content hash of this template: id, version, rendered text, asset bytes."""
         h = hashlib.sha256()

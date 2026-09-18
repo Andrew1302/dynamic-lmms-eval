@@ -62,6 +62,10 @@ def load_exemplars(task: str, variant: str) -> tuple[Exemplar, ...]:
 class FewShotImageCoT(PromptTemplate):
     id = "cot_fewshot_img_v1"
     expects_reasoning = True
+    # Measured on vm03: a 3-image request (two exemplars + the document) came to
+    # 18,602 prompt tokens, which overflowed a 16,384 window mid-run. 24,576
+    # holds that plus the 2,048-token generation with room to spare.
+    min_window = 24576
 
     def answer_spec(self, task: str) -> AnswerSpec:
         return cot_answer_spec(task)

@@ -29,12 +29,18 @@ import sys
 from prompting.models import ModelProfile, Thinking, is_thinking_sku, profile_for
 from prompting.registry import DEFAULT_PROMPT_ID, load_template
 
-# Tokens of prompt the window must still fit once generation is reserved.
-# Deliberately modest: Gemma's no-think window is only 4096 *in total*, and
-# that configuration ran a full campaign, so a large headroom would reject a
-# setup already known to work. This guards the real failure mode -- a template
-# asking for more generation than the window can ever hold -- not tight fits.
-PROMPT_HEADROOM = 1024
+# Window budgeting. The prompt has to fit alongside the generation, and for an
+# image benchmark the prompt is mostly vision tokens.
+#
+# TEXT_PROMPT_HEADROOM is deliberately modest: Gemma's no-think window is only
+# 4096 *in total* and ran a full campaign, so a large text allowance would
+# reject a configuration already known to work.
+#
+# Vision tokens are deliberately NOT estimated here. They vary with the render
+# and the processor, and an invented per-image constant rejects configurations
+# that have demonstrably run. A template that needs an unusual window declares
+# it via PromptTemplate.min_window, from a measurement.
+TEXT_PROMPT_HEADROOM = 1024
 
 # The task yaml's generation_kwargs. gen_kwargs are only passed on the command
 # line when they differ from these, so a plain run keeps the historical argv.
@@ -103,22 +109,28 @@ def resolve_budget(template, profile: ModelProfile, thinking: bool) -> dict:
         # A model that answers verbosely needs room even under a terse prompt.
         gen["max_new_tokens"] = max(gen["max_new_tokens"], profile.answer_floor)
 
-    window = profile.window(thinking)
-    if profile.backend in ("vllm", "vllm_chat") and gen["max_new_tokens"] + PROMPT_HEADROOM > window:
-        raise BudgetError(f"{template.id} needs {gen['max_new_tokens']} new tokens but {profile.backend} window is {window} " f"(only {window - PROMPT_HEADROOM} left after {PROMPT_HEADROOM} of prompt headroom)")
+    if profile.backend in ("vllm", "vllm_chat"):
+        needed = max(gen["max_new_tokens"] + TEXT_PROMPT_HEADROOM, getattr(template, "min_window", None) or 0)
+        window = profile.window(thinking, required=needed)
+        if needed > window:
+            raise BudgetError(
+                f"{template.id} needs a {needed}-token window but {profile.backend} allows {window} "
+                f"(generation {gen['max_new_tokens']}, declared minimum {getattr(template, 'min_window', None) or 0}). "
+                f"Raise max_model_len/max_model_len_ceiling for this model, or use fewer exemplars."
+            )
     return gen
 
 
-def _vllm_model_args(pretrained: str, profile: ModelProfile, thinking: bool, system_prompt: str | None, terse_directive: str | None) -> str:
+def _vllm_model_args(pretrained: str, profile: ModelProfile, thinking: bool, system_prompt: str | None, terse_directive: str | None, max_images: int = 1, window: int | None = None) -> str:
     args = [
         f"model={pretrained}",
         f"gpu_memory_utilization={profile.gpu_util}",
-        f"max_model_len={profile.window(thinking)}",
+        f"max_model_len={window or profile.window(thinking)}",
         f"max_num_seqs={profile.max_num_seqs}",
         "enforce_eager=True",
         "dtype=bfloat16",
         "trust_remote_code=True",
-        'limit_mm_per_prompt={"image":1}',
+        'limit_mm_per_prompt={"image":%d}' % max_images,
     ]
     if profile.thinking is Thinking.R1_SYSTEM_PROMPT:
         if thinking:
@@ -134,6 +146,13 @@ def _vllm_model_args(pretrained: str, profile: ModelProfile, thinking: bool, sys
     if profile.quantization:
         args.append(f"quantization={profile.quantization}")
     return ",".join(args)
+
+
+def _window_for(template, profile: ModelProfile, thinking: bool) -> int:
+    """The window the engine is actually configured with, after any growth
+    needed to hold this template's prompt."""
+    needed = max(template.budget().max_new_tokens + TEXT_PROMPT_HEADROOM, getattr(template, "min_window", None) or 0)
+    return profile.window(thinking, required=needed)
 
 
 def build_plan(
@@ -173,7 +192,7 @@ def build_plan(
         terse_directive = profile.terse_directive
 
     if backend in ("vllm", "vllm_chat"):
-        model_args = _vllm_model_args(pretrained, profile, thinking, system_prompt, terse_directive)
+        model_args = _vllm_model_args(pretrained, profile, thinking, system_prompt, terse_directive, template.max_images(), window=_window_for(template, profile, thinking))
         batch_size = profile.batch_size
     elif backend == "internvl3_5":
         # InternVL3 tiles each image up to max_num times (default 12, ~3k vision

@@ -109,7 +109,7 @@ def test_a_template_that_cannot_fit_the_window_raises():
 
             return TokenBudget(max_new_tokens=999_999)
 
-    with pytest.raises(BudgetError, match="window is"):
+    with pytest.raises(BudgetError, match="needs a"):
         resolve_budget(Greedy(), profile_for("google/gemma-4-E2B-it"), thinking=False)
 
 
@@ -137,12 +137,17 @@ def test_direct_v1_on_a_plain_model_omits_gen_kwargs_entirely():
 
 def test_prompt_id_does_not_perturb_engine_tuning():
     """A template shapes the prompt and the budget, never the engine config."""
-    kwargs = dict(pretrained="Qwen/Qwen3.5-4B", thinking=False, tasks="coloring", job_name="j")
+    kwargs = dict(pretrained="Qwen/Qwen3.5-0.8B", thinking=False, tasks="coloring", job_name="j")
     a = build_plan(prompt_id="direct_v1", **kwargs)
     b = build_plan(prompt_id="cot_fewshot_img_v1", **kwargs)
 
+    # Two engine settings are legitimately prompt-derived: the terse directive
+    # and the image limit. Everything else is the card's business, not the
+    # prompt's.
     def engine(plan):
-        return sorted(p for p in plan.model_args.split(",") if not p.startswith("reasoning_prompt="))
+        # three settings are legitimately prompt-derived: the terse directive,
+        # the image limit, and the window (grown to hold a few-shot prompt)
+        return sorted(p for p in plan.model_args.split(",") if not p.startswith(("reasoning_prompt=", "limit_mm_per_prompt=", "max_model_len=")))
 
     assert engine(a) == engine(b)
     assert a.env == b.env
@@ -150,13 +155,25 @@ def test_prompt_id_does_not_perturb_engine_tuning():
     assert a.gen_kwargs != b.gen_kwargs  # the budget is the template's business
 
 
+def test_the_image_limit_follows_the_template():
+    """vllm rejects a request carrying more images than limit_mm_per_prompt
+    allows, so pinning it at 1 made few-shot exemplars unrunnable."""
+    kwargs = dict(pretrained="Qwen/Qwen3.5-0.8B", thinking=False, tasks="coloring", job_name="j")
+    assert 'limit_mm_per_prompt={"image":1}' in build_plan(prompt_id="direct_v1", **kwargs).model_args
+    assert 'limit_mm_per_prompt={"image":1}' in build_plan(prompt_id="cot_zeroshot_v1", **kwargs).model_args
+    # two exemplar images plus the document's own
+    assert 'limit_mm_per_prompt={"image":3}' in build_plan(prompt_id="cot_fewshot_img_v1", **kwargs).model_args
+
+
 def test_the_terse_directive_is_never_applied_to_a_reasoning_template():
     """Qwen3.5's no-think arm carries 'reply with only the final answer'. Handing
     that to a CoT prompt would give the model two contradictory instructions --
     the collision this refactor exists to make impossible."""
+    kwargs = dict(pretrained="Qwen/Qwen3.5-0.8B", thinking=False, tasks="coloring", job_name="j")
+    assert "Reply with only the final answer" not in build_plan(prompt_id="cot_zeroshot_v1", **kwargs).model_args
     kwargs = dict(pretrained="Qwen/Qwen3.5-4B", thinking=False, tasks="coloring", job_name="j")
     assert "Reply with only the final answer" in build_plan(prompt_id="direct_v1", **kwargs).model_args
-    for cot in ("cot_zeroshot_v1", "cot_fewshot_img_v1"):
+    for cot in ("cot_zeroshot_v1",):
         assert "Reply with only the final answer" not in build_plan(prompt_id=cot, **kwargs).model_args
 
 
@@ -173,3 +190,22 @@ def test_a_thinking_sku_reasons_even_when_thinking_is_off():
 def test_unknown_checkpoint_fails_with_a_pointer():
     with pytest.raises(KeyError, match="prompting/models.py"):
         build_plan(pretrained="acme/mystery-7b", thinking=False, tasks="coloring", job_name="j")
+
+
+def test_a_few_shot_prompt_grows_the_window_only_where_the_card_allows():
+    """The few-shot prompt measured 18,602 tokens on the VM and overflowed a
+    16,384 window mid-run. The template now declares what it needs; a small
+    checkpoint has the KV headroom to grant it, the 4B does not and must say so
+    rather than dying inside vllm after the model has loaded."""
+    small = build_plan(pretrained="Qwen/Qwen3.5-0.8B", thinking=False, tasks="coloring", job_name="j", prompt_id="cot_fewshot_img_v1")
+    assert "max_model_len=24576" in small.model_args
+
+    with pytest.raises(BudgetError, match="needs a 24576-token window"):
+        build_plan(pretrained="Qwen/Qwen3.5-4B", thinking=False, tasks="coloring", job_name="j", prompt_id="cot_fewshot_img_v1")
+
+
+def test_single_image_templates_do_not_grow_the_window():
+    """Growth must be driven by need, or every run's engine config would drift."""
+    for pid in ("direct_v1", "cot_zeroshot_v1"):
+        plan = build_plan(pretrained="Qwen/Qwen3.5-4B", thinking=False, tasks="coloring", job_name="j", prompt_id=pid)
+        assert "max_model_len=16384" in plan.model_args, pid

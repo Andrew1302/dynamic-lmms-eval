@@ -43,6 +43,11 @@ class ModelProfile:
     gpu_util: float = 0.93
     max_model_len: int = 12288
     max_model_len_thinking: int | None = None  # None => same as max_model_len
+    # How far max_model_len may be grown to fit a large prompt (few-shot images
+    # are ~6k tokens each). None => no growth: the configured window is a hard
+    # limit, because on the 12 GiB cards a wider window costs KV cache the model
+    # does not have. Set it only where the headroom has actually been checked.
+    max_model_len_ceiling: int | None = None
     max_num_seqs: int = 256
     quantization: str | None = None
     keep_bf16_patterns: str | None = None  # fp8 vision-blindness fix
@@ -62,10 +67,11 @@ class ModelProfile:
     # for reasoning, so it can never contradict a CoT instruction.
     terse_directive: str | None = None
 
-    def window(self, thinking: bool) -> int:
-        if thinking and self.max_model_len_thinking is not None:
-            return self.max_model_len_thinking
-        return self.max_model_len
+    def window(self, thinking: bool, required: int = 0) -> int:
+        base = self.max_model_len_thinking if (thinking and self.max_model_len_thinking is not None) else self.max_model_len
+        if required > base and self.max_model_len_ceiling:
+            return min(max(base, required), self.max_model_len_ceiling)
+        return base
 
     def env(self) -> dict[str, str]:
         out: dict[str, str] = {}
@@ -144,6 +150,23 @@ QWEN3_5 = ModelProfile(
     terse_directive=r"\n\nReply with only the final answer and nothing else. No reasoning or explanation.",
 )
 
+# Qwen3.5-0.8B: small enough that none of the 4B entry's contortions apply.
+# bf16 (fp8 buys nothing at this size and adds a variable), a roomy window, and
+# no answer floor. Used for fast end-to-end smokes of the prompt layer.
+QWEN3_5_SMALL = ModelProfile(
+    match=("qwen3.5-0.8b", "qwen3.5-0_8b"),
+    backend="vllm",
+    gpu_util=0.85,
+    max_model_len=16384,
+    max_num_seqs=8,
+    # A 0.8B leaves plenty of KV headroom on the 12 GiB card, so its window can
+    # grow to hold a few-shot prompt (measured ~19.5k for two exemplar images).
+    max_model_len_ceiling=32768,
+    reasoning_parser="qwen3",
+    thinking_token_budget=4096,
+    think_max_new_tokens=5120,
+)
+
 QWEN3_VL = ModelProfile(match=("qwen3-vl",), backend="qwen3_vl", thinking=Thinking.REASONING_PROMPT, batch_size=1)
 QWEN2_5_VL = ModelProfile(match=("qwen2.5-vl", "qwen2_5-vl"), backend="qwen2_5_vl", thinking=Thinking.REASONING_PROMPT, batch_size=1)
 LLAVA_OV_1_5 = ModelProfile(match=("llava-onevision-1.5",), backend="llava_onevision1_5", thinking=Thinking.REASONING_PROMPT, batch_size=1)
@@ -158,6 +181,7 @@ PROFILES: tuple[ModelProfile, ...] = (
     LLAVA_OV_1_5,
     MINICPM_V,
     LLAMA_VISION,
+    QWEN3_5_SMALL,
     QWEN3_5,
     GEMMA_4_E2B,
 )
