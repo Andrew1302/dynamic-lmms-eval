@@ -62,6 +62,11 @@ from dotenv import load_dotenv
 
 # Repo root = three levels up from examples/models/dynamic_graph_benchmark/.
 REPO_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO_ROOT))
+
+from prompting.plan import _task_list  # noqa: E402
+from prompting.registry import DEFAULT_PROMPT_ID, load_template  # noqa: E402
+
 # The path the task YAMLs load via load_from_disk (see _default_template_yaml).
 CANONICAL_DATASET_DIR = "./dynamic_graph_benchmark_data"
 
@@ -93,6 +98,8 @@ def _run(cmd: list[str]) -> None:
     # Force UTF-8 in the child so lmms-eval's results table (which contains
     # non-ASCII glyphs like the up-arrow) doesn't crash on a Windows cp1252
     # console with UnicodeEncodeError.
+    # PROMPT_ID is the transport the task hooks read (process_results never
+    # receives lmms_eval_specific_kwargs), so it must reach the eval subprocess.
     env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     subprocess.run(cmd, cwd=REPO_ROOT, check=True, env=env)
 
@@ -112,14 +119,27 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--edge-style", default="straight", choices=["straight", "curved"])
     p.add_argument("--include-adjacency-matrix", action="store_true")
     p.add_argument("--batch-size", type=int, default=1)
-    p.add_argument("--max-new-tokens", type=int, default=None, help="override per-generation output budget via --gen_kwargs max_new_tokens=N. Needed for reasoning models (e.g. gemini-3.x-pro) that would otherwise spend the task YAML's 64-token cap on thinking and return an empty answer.")
+    p.add_argument(
+        "--max-new-tokens",
+        type=int,
+        default=None,
+        help="override per-generation output budget via --gen_kwargs max_new_tokens=N. Needed for reasoning models (e.g. gemini-3.x-pro) that would otherwise spend the task YAML's 64-token cap on thinking and return an empty answer.",
+    )
     p.add_argument("--max-tokens", type=int, default=None, help="optional hard token-budget ceiling across the run (lmms-eval --max_tokens); off by default")
+    p.add_argument("--prompt-id", default=DEFAULT_PROMPT_ID, help=f"prompt template (default {DEFAULT_PROMPT_ID}); see prompting/README.md")
     p.add_argument("--job-prefix", default=None, help="output dir prefix under ./logs (default derived from model-version + tasks)")
     return p.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+
+    # Select the prompt template for this run. Same mechanism as on the VMs
+    # (run_eval.sh exports PROMPT_ID), so a local probe and a remote campaign
+    # cannot silently differ in how the question was asked. Validated eagerly so
+    # a typo fails here rather than after the dataset has been rendered.
+    load_template(args.prompt_id)
+    os.environ["PROMPT_ID"] = args.prompt_id
 
     # --azure implies the openai wrapper; promote the default model so the user
     # doesn't have to pass both flags.
@@ -139,9 +159,7 @@ def main() -> int:
         missing = [v for v in _REQUIRED_ENV[provider] if not os.environ.get(v)]
         if missing:
             print(
-                f"[run_local_api] FATAL: {provider} run needs {', '.join(_REQUIRED_ENV[provider])} "
-                f"but these are unset: {', '.join(missing)}. Add them to {REPO_ROOT / '.env'} "
-                f"(or the environment).",
+                f"[run_local_api] FATAL: {provider} run needs {', '.join(_REQUIRED_ENV[provider])} " f"but these are unset: {', '.join(missing)}. Add them to {REPO_ROOT / '.env'} " f"(or the environment).",
                 file=sys.stderr,
             )
             return 2
@@ -164,8 +182,9 @@ def main() -> int:
         )
 
     py = sys.executable
-    variants = ("direct", "disguise")
-    lmms_tasks = ",".join(f"dynamic_graph_benchmark_{t}_{v}" for t in args.tasks for v in variants)
+    # Shared with run_eval.sh via prompting/plan.py so the two runners cannot
+    # disagree about which subtasks a task name expands to.
+    lmms_tasks = _task_list(" ".join(args.tasks))
 
     # lmms-eval --model_args (comma-separated key=value). base_url + api_key come
     # from OPENAI_* env (set above for Azure), NOT here — so no secret hits the
@@ -193,15 +212,24 @@ def main() -> int:
         # --- Step 1: prepare the dataset directly into the canonical dir (overwrites
         # the previous difficulty's dataset; runs are strictly sequential). ----------
         prepare_args = [
-            py, "tools/prepare_dynamic_graph_benchmark.py",
-            "--seed", str(args.seed),
-            "--tasks", *args.tasks,
-            "--output-dir", CANONICAL_DATASET_DIR,
-            "--num-samples", str(args.num_samples),
-            "--difficulty", diff,
-            "--label-style", args.label_style,
-            "--node-color", args.node_color,
-            "--edge-style", args.edge_style,
+            py,
+            "tools/prepare_dynamic_graph_benchmark.py",
+            "--seed",
+            str(args.seed),
+            "--tasks",
+            *args.tasks,
+            "--output-dir",
+            CANONICAL_DATASET_DIR,
+            "--num-samples",
+            str(args.num_samples),
+            "--difficulty",
+            diff,
+            "--label-style",
+            args.label_style,
+            "--node-color",
+            args.node_color,
+            "--edge-style",
+            args.edge_style,
         ]
         if args.include_adjacency_matrix:
             prepare_args.append("--include-adjacency-matrix")
@@ -211,14 +239,22 @@ def main() -> int:
         # Plain `python -m lmms_eval` (gemini_api's Accelerator() runs fine
         # single-process); avoids accelerate launch's process-spawn quirks on Windows.
         eval_args = [
-            py, "-m", "lmms_eval",
-            "--model", args.model,
-            "--model_args", model_args,
-            "--tasks", lmms_tasks,
-            "--batch_size", str(args.batch_size),
-            "--limit", str(args.num_samples),  # belt-and-suspenders cap on docs evaluated
+            py,
+            "-m",
+            "lmms_eval",
+            "--model",
+            args.model,
+            "--model_args",
+            model_args,
+            "--tasks",
+            lmms_tasks,
+            "--batch_size",
+            str(args.batch_size),
+            "--limit",
+            str(args.num_samples),  # belt-and-suspenders cap on docs evaluated
             "--log_samples",
-            "--output_path", out_path,
+            "--output_path",
+            out_path,
         ]
         if args.max_new_tokens is not None:
             eval_args += ["--gen_kwargs", f"max_new_tokens={args.max_new_tokens}"]
