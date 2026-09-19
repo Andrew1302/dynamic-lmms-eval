@@ -156,6 +156,11 @@ job_data_dir() {
     # lexicographic head -1 would resolve to the stale legacy copy.
     filed="$(ls -dt "${LOCAL_RESULTS_DIR}"/*/_jobs/"${job}" 2>/dev/null | head -1)"
     if [ -n "$filed" ]; then echo "$filed"; return; fi
+    # Smoke/experimental jobs (SCRATCH_RE in organize_results.py) are filed
+    # flat under _scratch/, not under a campaign's _jobs/. Without this every
+    # smoke batch report came out NO_DATA even though the run had succeeded.
+    local scratch="${LOCAL_RESULTS_DIR}/_scratch/${job}"
+    if [ -d "$scratch" ]; then echo "$scratch"; return; fi
     echo "$flat"
 }
 
