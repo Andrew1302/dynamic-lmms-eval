@@ -54,6 +54,11 @@ class ModelProfile:
     expandable_segments: bool = False  # PYTORCH_CUDA_ALLOC_CONF
     batch_size: int = 256
     skip_special_tokens_when_thinking: bool = True
+    # Reuse the KV of a shared prompt prefix across requests. Off in the legacy
+    # runs. It is a pure performance knob -- the reused KV is the same KV -- and
+    # it only pays when requests actually share a prefix, which is the case for
+    # a few-shot arm whose exemplar block is identical in every request.
+    enable_prefix_caching: bool = False
     reasoning_parser: str | None = None  # enables the native thinking budget
 
     # --- generation ---------------------------------------------------------
@@ -130,6 +135,7 @@ INTERNVL3_5 = ModelProfile(
 # fp8 halves the weights to make the InternVL-matched config fit; both arms run
 # fp8 so the comparison differs only in thinking.
 QWEN3_5 = ModelProfile(
+    enable_prefix_caching=True,
     match=("qwen3.5",),
     backend="vllm",
     gpu_util=0.92,
@@ -154,6 +160,7 @@ QWEN3_5 = ModelProfile(
 # bf16 (fp8 buys nothing at this size and adds a variable), a roomy window, and
 # no answer floor. Used for fast end-to-end smokes of the prompt layer.
 QWEN3_5_SMALL = ModelProfile(
+    enable_prefix_caching=True,
     match=("qwen3.5-0.8b", "qwen3.5-0_8b"),
     backend="vllm",
     gpu_util=0.85,

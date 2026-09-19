@@ -1,0 +1,32 @@
+id: sp_explain_v1
+summary: >-
+  Zero-shot with an explicit shortest-path method. Deliberately domain-neutral -
+  the same words are sent for the plain graph and for the map, so any difference
+  between the two is the framing and not the instructions.
+answer_style: cot
+strip_answer_cue: true
+exemplars: []
+
+# Wording notes, so a reader can see what each line is for:
+#  - step 1 forces the percept to be written down before any reasoning, which is
+#    where this benchmark's errors have concentrated;
+#  - step 2 names the direction constraint, the most common silent mistake;
+#  - step 4 is the actual algorithm, stated without jargon;
+#  - the closing line targets a specific failure: picking the route that *looks*
+#    short. On these renders the cheapest route is often the visually longer one.
+user_turn: |-
+  {question}
+
+  Work through it in this order:
+  1. List every connection you can see, with the two things it joins and the number written on it.
+  2. Note which way each arrow points. A connection may only be used in that direction.
+  3. Starting from the source, write out every route that reaches the destination by following the arrows.
+  4. Add up the numbers along each route, then compare the totals and keep the smallest.
+
+  Judge only by the totals you calculated, not by how the picture looks: a route drawn longer can still have the smaller total.
+  {instruction}
+
+budget:
+  max_new_tokens: 2048
+  temperature: 0.6
+  do_sample: true

@@ -78,8 +78,14 @@ def test_plan_matches_the_legacy_script(cell):
     assert plan.batch_size == legacy["batch_size"], cell
     assert plan.output_path == legacy["output_path"], cell
     assert plan.gen_kwargs == legacy["gen_kwargs"], cell
-    # model_args order is the script's; compare as a set of settings
-    assert sorted(plan.model_args.split(",")) == sorted(legacy["model_args"].split(",")), cell
+    # Every legacy setting must survive unchanged. Purely additive performance
+    # knobs are allowed, and must be named here so a behaviour change cannot
+    # sneak in as "just an addition".
+    PERF_ONLY = {"enable_prefix_caching=True"}
+    legacy_args = set(legacy["model_args"].split(","))
+    new_args = set(plan.model_args.split(","))
+    assert legacy_args <= new_args, f"{cell}: lost or changed {sorted(legacy_args - new_args)}"
+    assert new_args - legacy_args <= PERF_ONLY, f"{cell}: unexpected additions {sorted(new_args - legacy_args - PERF_ONLY)}"
 
 
 @pytest.mark.parametrize("cell", CELLS)

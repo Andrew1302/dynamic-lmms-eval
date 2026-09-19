@@ -28,7 +28,7 @@ import pytest
 from prompting import render
 from prompting.answers import cot_answer_spec, default_answer_spec
 from prompting.registry import PROMPT_IDS, active_template, load_template
-from prompting.templates.few_shot import EXEMPLAR_TASKS, load_exemplars
+from prompting.file_template import load_exemplar
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
 FIXTURES = json.loads((Path(__file__).parent / "fixtures" / "dynamic_graph_prompts.json").read_text(encoding="utf-8"))
@@ -127,21 +127,11 @@ def test_cot_templates_read_the_answer_from_the_end():
 # --------------------------------------------------------------------------
 # Exemplar integrity
 # --------------------------------------------------------------------------
-@pytest.mark.parametrize("task", EXEMPLAR_TASKS)
-@pytest.mark.parametrize("variant", ["direct", "disguise"])
-def test_exemplars_are_authored_and_self_consistent(task, variant):
-    """Every exemplar must be hand-written, uncontaminated, and demonstrate the
-    exact answer format its own instruction asks for."""
-    spec = cot_answer_spec(task)
-    for ex in load_exemplars(task, variant):
-        assert ex.image.exists()
-        assert "TODO" not in ex.worked_solution, f"{ex.image.stem} still has a placeholder solution"
-        assert ex.seed > EVAL_SEED_CEILING, f"{ex.image.stem} seed {ex.seed} may collide with eval graphs"
-        assert spec.parse(ex.worked_solution) == spec.parse(ex.answer), f"{ex.image.stem} does not reach its own gold answer"
 
 
 def test_fewshot_exemplars_are_variant_matched():
-    """A disguise question must not be shown plain-graph examples."""
+    """cot_fewshot_img_v1 follows the document's variant. (sp_fewshot_direct_ex1_v1
+    deliberately does not -- that cross-domain pinning is the PoC's probe.)"""
     template = load_template("cot_fewshot_img_v1")
     doc = _doc("coloring", "disguise", "Q: x\nA:")
     names = [Path(i).name for t in template.turns(doc) for i in t.images if i != "<doc-image>"]
@@ -153,3 +143,13 @@ def test_prompt_id_env_selects_the_template(monkeypatch):
     assert active_template().id == "direct_v1"
     monkeypatch.setenv("PROMPT_ID", "cot_zeroshot_v1")
     assert active_template().id == "cot_zeroshot_v1"
+
+
+def test_the_poc_fewshot_template_is_pinned_to_the_direct_exemplar():
+    """This one must NOT be variant-matched: the experiment asks whether a
+    plain-graph worked example transfers to the map framing."""
+    template = load_template("sp_fewshot_direct_ex1_v1")
+    for variant in ("direct", "disguise"):
+        doc = _doc("shortest_path", variant, "Q: x\nA:")
+        names = [Path(i).name for t in template.turns(doc) for i in t.images if i != "<doc-image>"]
+        assert names == ["shortest_path_direct_ex1.png"], f"{variant}: {names}"

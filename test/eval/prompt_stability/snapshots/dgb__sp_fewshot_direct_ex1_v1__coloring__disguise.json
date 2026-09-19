@@ -1,0 +1,33 @@
+{
+  "prompt_id": "sp_fewshot_direct_ex1_v1",
+  "task": "coloring",
+  "variant": "disguise",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: In the weighted directed acyclic graph shown, what is the minimum-weight path total from vertex 0 to vertex 3?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "shortest_path_direct_ex1.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "Two arrows leave vertex 0: one to vertex 1 costing 5, one to vertex 2 costing 8.\nThrough vertex 1: 0 to 1 is 5, then 1 to 2 is 3, then 2 to 3 is 7, giving 5 + 3 + 7 = 15.\nStraight to vertex 2: 0 to 2 is 8, then 2 to 3 is 7, giving 8 + 7 = 15.\nBoth routes reach vertex 3 at a total of 15, so the minimum is 15.\n15",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: How many colors are needed to color this map so that no two neighboring regions share the same color?\n\nAdjacency list of the underlying graph:\nProvided graph adjacency list.Encoding: adjacency list. Adj[u] = [v1, v2, ...] lists the neighbors of node u.\nAdj[0] = [1, 4, 7, 9]\nAdj[1] = [0, 7, 8, 9, 11]\nAdj[2] = [6, 10, 11]\nAdj[3] = [4, 5, 6, 9]\nAdj[4] = [0, 3, 5, 9]\nAdj[5] = [3, 4, 6]\nAdj[6] = [2, 3, 5, 9, 11]\nAdj[7] = [0, 1, 8]\nAdj[8] = [1, 7, 10, 11]\nAdj[9] = [0, 1, 3, 4, 6, 11]\nAdj[10] = [2, 8, 11]\nAdj[11] = [1, 2, 6, 8, 9, 10]\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as a single integer.",
+  "gen_kwargs": {
+    "max_new_tokens": 2048,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

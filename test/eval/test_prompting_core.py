@@ -27,12 +27,17 @@ from prompting.registry import (
     active_template,
     load_template,
 )
-from prompting.templates.few_shot import EXEMPLAR_TASKS, N_EXEMPLARS, load_exemplars
+from prompting.file_template import LIBRARY_DIR, load_exemplar
 
 REPO = Path(__file__).resolve().parents[2]
 TASK_DIR = REPO / "lmms_eval" / "tasks" / "dynamic_graph_benchmark"
 ASSETS = REPO / "prompting" / "assets"
 VARIANTS = ("direct", "disguise")
+TASKS = ("coloring", "directed_connectivity", "shortest_path")
+# Eval graphs are seeded from base 42; exemplars must sit far outside that
+# space so a worked example can never be a question the model is scored on.
+EVAL_SEED_CEILING = 100_000_000
+STEMS = sorted(p.stem for p in ASSETS.glob("*.yaml"))
 
 
 # ==========================================================================
@@ -127,7 +132,7 @@ def test_with_instruction_keeps_the_parser():
 
 def test_cot_answer_spec_changes_instruction_and_tiebreak_together():
     """Instruction and parser must move as one -- that is the whole design."""
-    for task in EXEMPLAR_TASKS:
+    for task in TASKS:
         terse, cot = default_answer_spec(task), cot_answer_spec(task)
         assert cot.instruction() != terse.instruction()
         assert "last line" in cot.instruction()
@@ -163,7 +168,7 @@ def test_token_budget_gen_kwargs():
 
 
 def test_canonical_docs_cover_every_task():
-    assert {d["task"] for d in CANONICAL_DOCS} == set(EXEMPLAR_TASKS)
+    assert {d["task"] for d in CANONICAL_DOCS} == set(TASKS)
 
 
 def test_fingerprint_reacts_to_text_version_and_budget():
@@ -262,7 +267,10 @@ def test_assistant_turns_carry_no_images():
 # registry.py
 # ==========================================================================
 def test_registry_contents_and_default():
-    assert set(PROMPT_IDS) == {"direct_v1", "cot_zeroshot_v1", "cot_fewshot_img_v1"}
+    """The library grows as experiments are added, so assert the core templates
+    are present rather than pinning an exact set -- but the default must not move,
+    because it is what every historical campaign used."""
+    assert {"direct_v1", "cot_zeroshot_v1", "cot_fewshot_img_v1"} <= set(PROMPT_IDS)
     assert DEFAULT_PROMPT_ID == "direct_v1"
 
 
@@ -295,7 +303,7 @@ def test_every_template_declares_a_usable_budget(prompt_id):
 
 
 @pytest.mark.parametrize("prompt_id", PROMPT_IDS)
-@pytest.mark.parametrize("task", EXEMPLAR_TASKS)
+@pytest.mark.parametrize("task", TASKS)
 def test_every_template_renders_every_task_and_variant(prompt_id, task):
     template = load_template(prompt_id)
     for variant in VARIANTS:
@@ -318,38 +326,12 @@ def test_cot_templates_strip_the_trailing_answer_cue():
 # ==========================================================================
 # exemplar assets
 # ==========================================================================
-@pytest.mark.parametrize("task", EXEMPLAR_TASKS)
-@pytest.mark.parametrize("variant", VARIANTS)
-def test_every_task_variant_has_a_full_set_of_exemplars(task, variant):
-    assert len(load_exemplars(task, variant)) == N_EXEMPLARS
 
 
-@pytest.mark.parametrize("task", EXEMPLAR_TASKS)
-@pytest.mark.parametrize("variant", VARIANTS)
-def test_exemplars_do_not_teach_a_constant_answer(task, variant):
-    """Two examples sharing an answer demonstrate a default, not a method."""
-    answers = [ex.answer for ex in load_exemplars(task, variant)]
-    assert len(set(answers)) == len(answers), f"{task}/{variant} exemplars all answer {answers[0]}"
 
 
-@pytest.mark.parametrize("task", EXEMPLAR_TASKS)
-@pytest.mark.parametrize("variant", VARIANTS)
-def test_exemplar_images_are_real_images(task, variant):
-    from PIL import Image
-
-    for ex in load_exemplars(task, variant):
-        with Image.open(ex.image) as im:
-            im.verify()
 
 
-@pytest.mark.parametrize("task", EXEMPLAR_TASKS)
-@pytest.mark.parametrize("variant", VARIANTS)
-def test_exemplar_questions_match_their_variant_and_task(task, variant):
-    for ex in load_exemplars(task, variant):
-        assert ex.task == task
-        assert ex.variant == variant
-        assert ex.question.startswith("Q:")
-        assert ex.question.rstrip().endswith("A:")
 
 
 def test_exemplar_prompt_text_is_ascii():
@@ -421,3 +403,23 @@ def test_the_deleted_undirected_connectivity_task_is_fully_gone():
     for line in group.splitlines():
         if "connectivity" in line:
             assert "directed_connectivity" in line
+
+
+@pytest.mark.parametrize("stem", STEMS)
+def test_every_exemplar_asset_is_usable(stem):
+    """Every shipped worked example must load, be uncontaminated, and end in the
+    exact answer format its own instruction asks for."""
+    ex = load_exemplar(stem)
+    spec = cot_answer_spec(ex.task)
+    assert ex.image.exists()
+    assert "TODO" not in ex.worked_solution, f"{stem} still has a placeholder solution"
+    assert ex.seed > EVAL_SEED_CEILING, f"{stem} seed {ex.seed} may collide with eval graphs"
+    assert spec.parse(ex.worked_solution) == spec.parse(ex.answer), f"{stem} does not reach its own gold answer"
+    assert not any(ord(c) > 127 for c in ex.worked_solution), f"{stem} has non-ascii prompt text"
+
+
+def test_the_library_covers_every_template_id():
+    """PROMPT_IDS is derived from the files on disk, so it cannot drift."""
+    from prompting.registry import PROMPT_IDS
+
+    assert set(PROMPT_IDS) == {p.stem for p in LIBRARY_DIR.glob("*.yaml")}

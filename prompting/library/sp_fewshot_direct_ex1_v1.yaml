@@ -1,0 +1,27 @@
+id: sp_fewshot_direct_ex1_v1
+summary: >-
+  One worked example, PINNED to the plain-graph exemplar regardless of the
+  question's variant. This is on purpose: the disguise questions are answered
+  after seeing a *direct* graph example, which probes whether the method
+  transfers across the framing. Do not "fix" this to be variant-matched.
+answer_style: cot
+strip_answer_cue: true
+
+# No {variant} placeholder: the same direct exemplar is used for both.
+exemplars:
+  - "shortest_path_direct_ex1"
+
+user_turn: |-
+  {question}
+
+  Think step by step about what the image shows, then answer.
+  {instruction}
+
+budget:
+  max_new_tokens: 2048
+  temperature: 0.6
+  do_sample: true
+
+# One exemplar image plus the document's own: ~12.5k prompt tokens, which fits
+# the 4B panel model's 16,384 window. Two exemplars would not.
+min_window: 16384

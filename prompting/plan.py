@@ -145,6 +145,8 @@ def _vllm_model_args(pretrained: str, profile: ModelProfile, thinking: bool, sys
         args.append(f"reasoning_parser={profile.reasoning_parser}")
     if profile.quantization:
         args.append(f"quantization={profile.quantization}")
+    if profile.enable_prefix_caching:
+        args.append("enable_prefix_caching=True")
     return ",".join(args)
 
 

@@ -1,0 +1,33 @@
+{
+  "prompt_id": "sp_fewshot_direct_ex1_v1",
+  "task": "directed_connectivity",
+  "variant": "disguise",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: In the weighted directed acyclic graph shown, what is the minimum-weight path total from vertex 0 to vertex 3?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+      "images": [
+        "shortest_path_direct_ex1.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "Two arrows leave vertex 0: one to vertex 1 costing 5, one to vertex 2 costing 8.\nThrough vertex 1: 0 to 1 is 5, then 1 to 2 is 3, then 2 to 3 is 7, giving 5 + 3 + 7 = 15.\nStraight to vertex 2: 0 to 2 is 8, then 2 to 3 is 7, giving 8 + 7 = 15.\nBoth routes reach vertex 3 at a total of 15, so the minimum is 15.\n15",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: Each corridor passage in this maze has an arrow showing the only allowed direction of travel. Following the arrows, is it possible to travel from the green cell to the red cell?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+  "gen_kwargs": {
+    "max_new_tokens": 2048,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

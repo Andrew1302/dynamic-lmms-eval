@@ -1,0 +1,21 @@
+{
+  "prompt_id": "sp_explain_v1",
+  "task": "directed_connectivity",
+  "variant": "direct",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: Following the arrow directions, is there a directed path from node 8 to node 10?\n\nWork through it in this order:\n1. List every connection you can see, with the two things it joins and the number written on it.\n2. Note which way each arrow points. A connection may only be used in that direction.\n3. Starting from the source, write out every route that reaches the destination by following the arrows.\n4. Add up the numbers along each route, then compare the totals and keep the smallest.\n\nJudge only by the totals you calculated, not by how the picture looks: a route drawn longer can still have the smaller total.\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+  "gen_kwargs": {
+    "max_new_tokens": 2048,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

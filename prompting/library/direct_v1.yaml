@@ -1,0 +1,16 @@
+id: direct_v1
+summary: >-
+  Terse baseline. Reproduces every campaign up to 17_abl_scram byte for byte -
+  a golden test pins it against prompts recorded in real run logs. Do not edit.
+answer_style: terse
+strip_answer_cue: false
+exemplars: []
+
+# {question} is the stored dataset question, {instruction} comes from the
+# answer format (see answer_style). What you read here is what is sent.
+user_turn: |-
+  {instruction}
+  {question}
+
+budget:
+  max_new_tokens: 64

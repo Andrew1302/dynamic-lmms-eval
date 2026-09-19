@@ -1,0 +1,25 @@
+id: cot_fewshot_img_v1
+summary: >-
+  Two worked examples with their own images, variant-matched (a disguise
+  question gets disguise examples).
+answer_style: cot
+strip_answer_cue: true
+
+# {task} and {variant} are filled from the document, so these follow it.
+exemplars:
+  - "{task}_{variant}_ex1"
+  - "{task}_{variant}_ex2"
+
+user_turn: |-
+  {question}
+
+  Think step by step about what the image shows, then answer.
+  {instruction}
+
+budget:
+  max_new_tokens: 2048
+  temperature: 0.6
+  do_sample: true
+
+# Measured on vm03: three images came to 18,602 prompt tokens.
+min_window: 24576

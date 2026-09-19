@@ -1,7 +1,11 @@
 """Prompt template lookup.
 
-PROMPT_ID is the transport: `process_results` is arity-2 and never receives
-`lmms_eval_specific_kwargs`, so an env var is the only channel that reaches all
+Templates are declared in prompting/library/*.yaml -- one file per template,
+containing the literal prompt. Adding a condition means adding a file; there is
+no Python to write and no second place to look.
+
+PROMPT_ID is the transport: process_results is arity-2 and never receives
+lmms_eval_specific_kwargs, so an env var is the only channel that reaches all
 three task hooks (text, visual, scoring) alike.
 """
 
@@ -11,26 +15,32 @@ import functools
 import os
 
 from prompting.base import PromptTemplate
-from prompting.templates.direct import DirectAnswer
-from prompting.templates.few_shot import FewShotImageCoT
-from prompting.templates.zero_shot import ZeroShotCoT
+from prompting.file_template import load_library
 
 DEFAULT_PROMPT_ID = "direct_v1"
 
-_TEMPLATES: dict[str, type[PromptTemplate]] = {t.id: t for t in (DirectAnswer, ZeroShotCoT, FewShotImageCoT)}
 
-PROMPT_IDS = sorted(_TEMPLATES)
+def _library() -> dict[str, PromptTemplate]:
+    return load_library()
 
 
 @functools.lru_cache(maxsize=None)
 def load_template(prompt_id: str) -> PromptTemplate:
-    """Instantiate by id. Cached: `!function` re-executes a task utils.py once
-    per leaf YAML (6x per run), and fingerprinting hashes asset bytes."""
+    """Look up a template by id. Cached: `!function` re-executes a task's
+    utils.py once per leaf YAML, and fingerprinting hashes asset bytes."""
+    lib = _library()
     try:
-        return _TEMPLATES[prompt_id]()
+        return lib[prompt_id]
     except KeyError:
-        raise KeyError(f"unknown PROMPT_ID {prompt_id!r}; known: {PROMPT_IDS}") from None
+        raise KeyError(f"unknown PROMPT_ID {prompt_id!r}; known: {sorted(lib)}") from None
 
 
 def active_template() -> PromptTemplate:
     return load_template(os.environ.get("PROMPT_ID", DEFAULT_PROMPT_ID))
+
+
+def __getattr__(name):
+    # PROMPT_IDS is derived from the library on disk, so it cannot drift from it.
+    if name == "PROMPT_IDS":
+        return sorted(_library())
+    raise AttributeError(name)
