@@ -26,11 +26,12 @@ import re
 from pathlib import Path
 
 # Short aliases used in results-tree leaf names.
-MODELS = {"internvl35_4b": "internvl", "qwen35_4b": "qwen", "gemma4_e2b": "gemma"}
-MODEL_PRETTY = {"internvl35_4b": "InternVL3.5-4B", "qwen35_4b": "Qwen3.5-4B", "gemma4_e2b": "Gemma-4-E2B"}
+MODELS = {"internvl35_4b": "internvl", "qwen35_4b": "qwen", "qwen35_2b": "qwen2b", "gemma4_e2b": "gemma"}
+MODEL_PRETTY = {"internvl35_4b": "InternVL3.5-4B", "qwen35_4b": "Qwen3.5-4B", "qwen35_2b": "Qwen3.5-2B", "gemma4_e2b": "Gemma-4-E2B"}
 PRETRAINED = {
     "internvl35_4b": "OpenGVLab/InternVL3_5-4B",
     "qwen35_4b": "Qwen/Qwen3.5-4B",
+    "qwen35_2b": "Qwen/Qwen3.5-2B",
     "gemma4_e2b": "google/gemma-4-E2B-it",
 }
 
@@ -42,6 +43,7 @@ _DIFF = r"(?P<diff>easy|medium|hard)"
 _MODEL = r"(?P<model>[a-z0-9]+_[a-z0-9]+)"
 _COL = r"(?:(?P<col>coloring)_)?"  # optional coloring-only job marker
 _ARM = r"(?P<arm>think|nothink)"
+_CTASK = r"(?P<task>sp|coloring|conn)"  # task marker for the cott_ families
 
 # Jobs whose results are inspection/smoke material, never a campaign. Checked
 # before the patterns, mirroring organize_results.match_job.
@@ -159,6 +161,28 @@ FAMILIES: tuple[Family, ...] = (
         axis="standard",
         axis_parts=("diff",),
         description="Baseline benchmark v2, n=500/task, 3 difficulties x 3 models, original + disguise.",
+    ),
+    Family(
+        key="cot_task_inc",
+        # Deferred increment of a cot_task cell: same seed, higher --start-index.
+        pattern=re.compile(rf"^cottinc_{_CTASK}_(?P<prompt>[a-z0-9_]+_v\d+)_{_DIFF}_{_MODEL}$"),
+        campaign="18_abl_cot",
+        leaf_tmpl="{model}_{diff}_{task}_{prompt}_inc",
+        axis="cot_prompt",
+        axis_parts=("task", "prompt", "diff"),
+        description="Deferred increment of the per-task CoT runs; pools with the base run because sample generation is index-pure.",
+    ),
+    Family(
+        key="cot_task",
+        # Task-scoped CoT arms. The prefix is "cott_", NOT "cot_<task>_": prompt
+        # ids already start with the task ("sp_explain_v1"), so a "cot_sp_..."
+        # pattern would also match the existing cot_prompt jobs and re-file them.
+        pattern=re.compile(rf"^cott_{_CTASK}_(?P<prompt>[a-z0-9_]+_v\d+)_{_DIFF}_{_MODEL}$"),
+        campaign="18_abl_cot",
+        leaf_tmpl="{model}_{diff}_{task}_{prompt}",
+        axis="cot_prompt",
+        axis_parts=("task", "prompt", "diff"),
+        description="Chain-of-thought prompt experiment run per task. Image and graph are identical across arms; only the instruction text differs.",
     ),
     Family(
         key="cot_prompt",
