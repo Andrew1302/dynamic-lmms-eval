@@ -17,11 +17,14 @@ user_turn: |-
   Think step by step about what the image shows, then answer.
   {instruction}
 
+# Shared 8192 cap -- see sp_explain_v1.yaml. At 2048 this arm capped on
+# 10/50 direct and 24/50 disguise rows.
 budget:
-  max_new_tokens: 2048
+  max_new_tokens: 8192
   temperature: 0.6
   do_sample: true
 
-# One exemplar image plus the document's own: ~12.5k prompt tokens, which fits
-# the 4B panel model's 16,384 window. Two exemplars would not.
-min_window: 16384
+# One exemplar image plus the document's own: ~12.5k prompt tokens. That fits
+# a 16,384 window on its own, but not alongside the 8192-token generation
+# above (12.5k + 8.2k + headroom). Two exemplars would not fit either way.
+min_window: 24576

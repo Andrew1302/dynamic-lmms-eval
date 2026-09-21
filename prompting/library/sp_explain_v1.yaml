@@ -26,7 +26,20 @@ user_turn: |-
   Judge only by the totals you calculated, not by how the picture looks: a route drawn longer can still have the smaller total.
   {instruction}
 
+# 8192, not 2048: at 2048 this arm hit the cap on 27/50 direct and 38/50
+# disguise rows -- the median response WAS the cap -- and a third of its
+# "correct" answers were unconcluded rows whose last integer happened to
+# match. The arm was truncation-limited, not reasoning-limited. All three
+# PoC arms share this cap so truncation cannot differ between them.
 budget:
-  max_new_tokens: 2048
+  max_new_tokens: 8192
   temperature: 0.6
   do_sample: true
+
+# Capped at 8192, same as every other arm. This arm was briefly run at 16384
+# because it was the only one still truncating at 8192 (7/50 disguise rows).
+# Doubling it changed NOTHING measurable -- correct counts were identical
+# (24/50 direct, 14/50 disguise) and truncation moved 7 -> 6 -- because the
+# residual is non-termination (repetition loops and rambling that never
+# concludes), not an insufficient budget. A shared cap across arms matters
+# more than the last row: it keeps truncation from differing between arms.

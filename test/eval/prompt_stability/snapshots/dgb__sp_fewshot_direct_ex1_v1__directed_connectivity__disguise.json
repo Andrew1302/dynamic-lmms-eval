@@ -26,7 +26,7 @@
   ],
   "answer_instruction": "When you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
   "gen_kwargs": {
-    "max_new_tokens": 2048,
+    "max_new_tokens": 8192,
     "temperature": 0.6,
     "do_sample": true
   }

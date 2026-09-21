@@ -141,6 +141,11 @@ QWEN3_5 = ModelProfile(
     gpu_util=0.92,
     max_model_len=16384,
     max_model_len_thinking=20480,
+    # Measured on this card at fp8/0.92: GPU KV cache = 30,096 tokens. vllm
+    # refuses a max_model_len larger than the cache, so 24576 is the real
+    # ceiling here (32768 would fail at engine start). It buys the few-shot
+    # arms their ~12.5k two-image prompt at the cost of ~1.2x concurrency.
+    max_model_len_ceiling=24576,
     max_num_seqs=6,  # fp8 frees ~31k KV tokens: room for far more than InternVL's 2
     quantization="fp8",
     keep_bf16_patterns="visual.",
@@ -172,6 +177,46 @@ QWEN3_5_SMALL = ModelProfile(
     reasoning_parser="qwen3",
     thinking_token_budget=4096,
     think_max_new_tokens=5120,
+    # Same verbose-answer problem as its larger siblings.
+    answer_floor=1024,
+    terse_directive=r"\n\nReply with only the final answer and nothing else. No reasoning or explanation.",
+)
+
+# Qwen3.5-2B. Chosen for the CoT PoC after measuring the 4B: at max_num_seqs=6
+# it pinned 6 running with ~40 queued and only ~48% of KV used, so the cap was
+# binding and half the cache sat idle.
+#
+# bf16, deliberately not fp8. At this size the weights (~4.4 GiB) already leave
+# ~6.9 GiB for KV -- more cache than the fp8 4B had -- so quantisation would buy
+# nothing while reintroducing the fp8 vision-blindness risk class that cost a
+# whole campaign. max_num_seqs is set from the measurement: ~2.4k tokens resident
+# per request, ~56k tokens of cache, so 16 concurrent lands near 70% with room
+# for sequences to grow before vllm has to preempt.
+QWEN3_5_2B = ModelProfile(
+    enable_prefix_caching=True,
+    match=("qwen3.5-2b",),
+    backend="vllm",
+    gpu_util=0.92,
+    max_model_len=16384,
+    max_model_len_ceiling=32768,  # headroom for a few-shot prompt + a 16k CoT
+    max_num_seqs=16,
+    expandable_segments=True,
+    reasoning_parser="qwen3",
+    thinking_token_budget=8192,
+    think_max_new_tokens=9216,
+    # Like the 4B, this checkpoint answers a "single integer" question with a
+    # verbose worked solution, which the task yaml's 64-token default truncates
+    # before it ever states a number -- scoring the baseline at ~0 and making any
+    # CoT arm look 20x better than it is. Measured here: control responses capped
+    # at ~253 chars, all mid-reasoning. Both knobs below are how the 4B handles
+    # it, and they belong to any Qwen3.5 no-think arm.
+    #
+    # 8192, not 1024: even under the terse directive this checkpoint capped on
+    # 13/50 direct rows at 1024. direct_v1 is golden-pinned and must not be
+    # edited, so the floor is the right lever -- and it matches the CoT arms'
+    # cap, which keeps truncation from differing between the PoC arms.
+    answer_floor=8192,
+    terse_directive=r"\n\nReply with only the final answer and nothing else. No reasoning or explanation.",
 )
 
 QWEN3_VL = ModelProfile(match=("qwen3-vl",), backend="qwen3_vl", thinking=Thinking.REASONING_PROMPT, batch_size=1)
@@ -189,6 +234,7 @@ PROFILES: tuple[ModelProfile, ...] = (
     MINICPM_V,
     LLAMA_VISION,
     QWEN3_5_SMALL,
+    QWEN3_5_2B,
     QWEN3_5,
     GEMMA_4_E2B,
 )

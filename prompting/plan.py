@@ -152,8 +152,15 @@ def _vllm_model_args(pretrained: str, profile: ModelProfile, thinking: bool, sys
 
 def _window_for(template, profile: ModelProfile, thinking: bool) -> int:
     """The window the engine is actually configured with, after any growth
-    needed to hold this template's prompt."""
-    needed = max(template.budget().max_new_tokens + TEXT_PROMPT_HEADROOM, getattr(template, "min_window", None) or 0)
+    needed to hold this template's prompt.
+
+    Derived from resolve_budget rather than from template.budget(): the
+    profile can raise the generation above what the template asked for (an
+    answer_floor, or a thinking budget), and sizing the window from the
+    un-raised number would hand the engine a window too small for the
+    generation it is about to be asked for."""
+    gen = resolve_budget(template, profile, thinking)
+    needed = max(gen["max_new_tokens"] + TEXT_PROMPT_HEADROOM, getattr(template, "min_window", None) or 0)
     return profile.window(thinking, required=needed)
 
 
