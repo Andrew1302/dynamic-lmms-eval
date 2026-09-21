@@ -17,7 +17,7 @@ SAMPLE_QUESTIONS = {
     ("shortest_path", "direct"): "Q: In the weighted directed acyclic graph shown, what is the minimum-weight path total from vertex 0 to vertex 4?\nA:",
     ("shortest_path", "disguise"): "Q: The map of Latin America below shows several cities and the available driving routes between them. Each arrow indicates a one-way driving connection from one city to another, and is labeled with the typical driving time in hours. What is the minimum total driving time, in hours, from the start city to the end city?\nA:",
     ("coloring", "direct"): "Q: What is the minimum number of colors needed to color this graph so that no two adjacent nodes share a color?\nA:",
-    ("coloring", "disguise"): "Q: How many colors are needed to color this map so that no two neighboring regions share the same color?\nA:",
+    ("coloring", "disguise"): "Q: How many colors are needed to color this map so that no two regions sharing a land border have the same color? Regions separated by water, or touching only at a single point, are not neighbors.\nA:",
     ("directed_connectivity", "direct"): "Q: Following the arrow directions, is there a directed path from node 5 to node 3?\nA:",
     ("directed_connectivity", "disguise"): "Q: Each corridor passage in this maze has an arrow showing the only allowed direction of travel. Following the arrows, is it possible to travel from the green cell to the red cell?\nA:",
 }

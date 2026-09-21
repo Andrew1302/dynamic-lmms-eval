@@ -6,7 +6,7 @@
   "turns": [
     {
       "role": "user",
-      "text": "Q: How many colors are needed to color this map so that no two neighboring regions share the same color?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "text": "Q: How many colors are needed to color this map so that no two regions sharing a land border have the same color? Regions separated by water, or touching only at a single point, are not neighbors.\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
       "images": [
         "coloring_disguise_ex1.png"
       ]
@@ -18,7 +18,7 @@
     },
     {
       "role": "user",
-      "text": "Q: How many colors are needed to color this map so that no two neighboring regions share the same color?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "text": "Q: How many colors are needed to color this map so that no two regions sharing a land border have the same color? Regions separated by water, or touching only at a single point, are not neighbors.\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
       "images": [
         "coloring_disguise_ex2.png"
       ]

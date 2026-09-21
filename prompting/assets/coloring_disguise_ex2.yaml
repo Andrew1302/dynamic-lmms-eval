@@ -1,13 +1,15 @@
 task: coloring
 variant: disguise
 seed: 900000015
-question: 'Q: How many colors are needed to color this map so that no two neighboring
-  regions share the same color?
+question: 'Q: How many colors are needed to color this map so that no two regions
+  sharing a land border have the same color? Regions separated by water, or touching
+  only at a single point, are not neighbors.
 
   A:'
 answer: '4'
 authoring_adjacency: 'Q: How many colors are needed to color this map so that no two
-  neighboring regions share the same color?
+  regions sharing a land border have the same color? Regions separated by water, or
+  touching only at a single point, are not neighbors.
 
 
   Adjacency list of the underlying graph:
