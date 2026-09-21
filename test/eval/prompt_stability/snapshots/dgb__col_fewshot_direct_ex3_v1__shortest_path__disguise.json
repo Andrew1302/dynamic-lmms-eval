@@ -1,0 +1,33 @@
+{
+  "prompt_id": "col_fewshot_direct_ex3_v1",
+  "task": "shortest_path",
+  "variant": "disguise",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: What is the minimum number of colors needed to color this graph so that no two adjacent nodes share a color?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "coloring_direct_ex3.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "First I write down, for each node, the nodes joined to it by a line:\n0: 2, 4\n1: 3, 5, 6\n2: 0, 3\n3: 1, 2, 4\n4: 0, 3, 6\n5: 1\n6: 1, 4\n\nThen I read that list back to check it against itself. Every pair should appear twice, once from each side: 0 lists 2 and 2 lists 0, 4 lists 6 and 6 lists 4, and so on for all eight pairs. They all do, so the list is safe to use.\n\nNow I try two colours. Give node 0 the first colour. Its neighbours 2 and 4 must take the second. Node 3 is joined to both 2 and 4, so it takes the first again. Node 1 is joined to 3, so it takes the second, and 5 and 6, joined to 1, take the first. Node 6 is also joined to 4, which holds the second colour, so the first is still fine there.\n\nThat leaves 0, 3, 5 and 6 on one colour and 1, 2 and 4 on the other. Checking the eight lines one at a time, every line joins a node of the first colour to a node of the second, so no line has matching ends. Two colours are enough, and one cannot work once any line exists, so the minimum is 2.\n2",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: The map of Latin America below shows several cities and the available driving routes between them. Each arrow indicates a one-way driving connection from one city to another, and is labeled with the typical driving time in hours. What is the minimum total driving time, in hours, from the start city to the end city?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as a single integer.",
+  "gen_kwargs": {
+    "max_new_tokens": 8192,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

@@ -1,0 +1,41 @@
+id: conn_explain_v2
+summary: >-
+  Zero-shot directed reachability, bounded. v2 of conn_explain_v1. Same
+  domain-neutral intent - identical text for the plain graph and the maze - but
+  the work it asks for is bounded by the reachable set instead of by the size of
+  the picture.
+answer_style: cot
+strip_answer_cue: true
+exemplars: []
+
+# Why v2 exists, from the v1 traces:
+#   v1 step 1 said "List every arrow you can see". On the plain graph that is
+#   ~15 arrows and it worked well (7/10 correct, 0/10 truncated). On the maze
+#   disguise the same sentence demands hundreds of arrows, nearly all of them in
+#   decorative dead-end corridors: one row was still enumerating
+#   "Arrow between col 290-291" when it hit the 8192-token cap. 4/10 disguise
+#   rows truncated, and the arm scored BELOW the terse control, which answers
+#   "No" without looking and collects the majority rate.
+#
+# So the failure was not reasoning and not budget - it was an instruction that
+# does not terminate on one of the two framings. v2 never asks for the whole
+# picture: it expands a frontier from the start and stops when the destination
+# appears or nothing new can be added. Worst case is the reachable set, which is
+# small in both framings.
+user_turn: |-
+  {question}
+
+  Work through it in this order:
+  1. Name the two places the question asks about: where the route starts, and where it must end.
+  2. From the start, look only at the connections leading away from it, in the direction they point, and write down where each one arrives.
+  3. Take each new place you reached and do the same, adding only places not already on your list.
+  4. Stop as soon as the destination appears on the list, or when nothing new can be added.
+
+  A connection may only be followed in the direction it points; a route that travels against one does not count.
+  Do not describe the whole picture. Only write down the places you can actually reach from the start.
+  {instruction}
+
+budget:
+  max_new_tokens: 8192
+  temperature: 0.6
+  do_sample: true

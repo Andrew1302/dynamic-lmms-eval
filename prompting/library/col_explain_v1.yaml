@@ -1,0 +1,37 @@
+id: col_explain_v1
+summary: >-
+  Zero-shot with an explicit graph-colouring method. Deliberately domain-neutral -
+  the same words are sent for the plain graph and for the disguised framing, so any
+  difference between the two is the framing and not the instructions.
+answer_style: cot
+strip_answer_cue: true
+exemplars: []
+
+# Wording notes, so a reader can see what each line is for:
+#  - step 1 forces the percept to be written down before any reasoning, which is
+#    where this benchmark's errors have concentrated;
+#  - step 2 is the lower bound (a k-clique forces k colours), stated without jargon;
+#  - step 3 is the upper bound, i.e. actually trying the colouring;
+#  - the closing line targets the specific failure seen on this task: reading a
+#    smaller clique than the picture contains and so under-reporting the answer.
+user_turn: |-
+  {question}
+
+  Work through it in this order:
+  1. List every connection you can see, naming the two things it joins.
+  2. Find the largest group in which every member is joined to every other member. If that group has k members, at least k colours are needed, because no two of them may share.
+  3. Now try to colour the whole picture with exactly that many colours. If two joined things are forced to share, add one more colour and try again.
+  4. Report the smallest number of colours that works.
+
+  Before settling on the group in step 2, check every pair inside it really is joined: missing one connection makes the answer come out too small.
+  {instruction}
+
+# 16384, not 8192: 11/20 rows capped at 8192 in the 10-sample shakedown.
+# One image (~6.2k prompt), so min_window must be declared -- resolve_budget
+# sizes the window from max_new_tokens + headroom and does not estimate
+# vision tokens, which would leave no room for the image.
+budget:
+  max_new_tokens: 16384
+  temperature: 0.6
+  do_sample: true
+min_window: 24576

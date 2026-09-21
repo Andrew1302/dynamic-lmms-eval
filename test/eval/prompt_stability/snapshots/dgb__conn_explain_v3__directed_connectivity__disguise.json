@@ -1,0 +1,21 @@
+{
+  "prompt_id": "conn_explain_v3",
+  "task": "directed_connectivity",
+  "variant": "disguise",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: Each corridor passage in this maze has an arrow showing the only allowed direction of travel. Following the arrows, is it possible to travel from the green cell to the red cell?\n\nWork through it in this order:\n1. Name the two places the question asks about: where the route starts, and where it must end.\n2. Look at the starting place and find EVERY connection that leads away from it - not just the first one you notice. Before you accept one, check that its arrow points away from the place you are leaving, not towards it. Write down where each accepted connection arrives.\n3. Keep a list of places reached and a list of places you have not checked yet. Take an unchecked place, apply step 2 to it, and add any genuinely new places.\n4. Do not stop while any reached place is still unchecked. Stop only when the destination appears, or when every reached place has been checked and nothing new can be added.\n\nSay \"yes\" only if you can name the route from start to destination, step by step. If you never reached the destination and nothing is left to check, the answer is no.\nDo not describe the whole picture. Only write down the places you can actually reach from the start.\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+  "gen_kwargs": {
+    "max_new_tokens": 8192,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

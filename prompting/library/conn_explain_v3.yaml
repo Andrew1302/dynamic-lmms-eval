@@ -1,0 +1,44 @@
+id: conn_explain_v3
+summary: >-
+  Zero-shot directed reachability, bounded AND branching. v3 of conn_explain_v2.
+  Same domain-neutral text for the plain graph and the maze. v2 fixed
+  termination; v3 targets the two errors that remained.
+answer_style: cot
+strip_answer_cue: true
+exemplars: []
+
+# Measured behaviour of v2 (n=100 per variant, 8192 cap):
+#   plain graph : acc 0.82, recall(Yes) 0.96, specificity(No) 0.67
+#   maze        : acc 0.53, recall(Yes) 0.63, specificity(No) 0.43
+#   median distinct cells named: 3 (plain) / 4 (maze), on 13-node graphs
+#   truncation 0/100 and 1/100 - so the search STOPS early, it does not run out.
+#
+# Two failures visible in the traces, both addressed below:
+#
+#  (a) No branching. The model takes the FIRST arrow it notices at a place and
+#      walks a single chain. On one maze it went 0 -> 9 -> 6 and never saw
+#      9 -> 1, which is the first step of the true route 0 -> 9 -> 1 -> 12.
+#      Hence step 2's "every connection ... not just the first" and step 4's
+#      refusal to stop while anything is unchecked.
+#
+#  (b) Edges invented or followed backwards, which is where v2's false
+#      positives come from (specificity 0.67 on the plain graph, 0.43 on the
+#      maze). In the same trace it followed 6 -> 3 although 6 has no outgoing
+#      connection at all. Hence the explicit per-step direction check.
+user_turn: |-
+  {question}
+
+  Work through it in this order:
+  1. Name the two places the question asks about: where the route starts, and where it must end.
+  2. Look at the starting place and find EVERY connection that leads away from it - not just the first one you notice. Before you accept one, check that its arrow points away from the place you are leaving, not towards it. Write down where each accepted connection arrives.
+  3. Keep a list of places reached and a list of places you have not checked yet. Take an unchecked place, apply step 2 to it, and add any genuinely new places.
+  4. Do not stop while any reached place is still unchecked. Stop only when the destination appears, or when every reached place has been checked and nothing new can be added.
+
+  Say "yes" only if you can name the route from start to destination, step by step. If you never reached the destination and nothing is left to check, the answer is no.
+  Do not describe the whole picture. Only write down the places you can actually reach from the start.
+  {instruction}
+
+budget:
+  max_new_tokens: 8192
+  temperature: 0.6
+  do_sample: true

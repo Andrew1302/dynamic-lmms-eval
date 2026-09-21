@@ -1,0 +1,39 @@
+id: conn_explain_v1
+summary: >-
+  Zero-shot with an explicit directed-reachability method. Deliberately
+  domain-neutral - the same words are sent for the plain graph and for the
+  disguised framing, so any difference between the two is the framing and not
+  the instructions.
+answer_style: cot
+strip_answer_cue: true
+exemplars: []
+
+# Wording notes, so a reader can see what each line is for:
+#  - step 1 forces the percept to be written down before any reasoning, which is
+#    where this benchmark's errors have concentrated;
+#  - step 2 names the direction constraint, the most common silent mistake here;
+#  - steps 3-4 are a plain-language forward search, so a "no" has to be earned by
+#    running out of arrows rather than guessed;
+#  - the closing line targets the measured failure mode on this task: answering
+#    from a general impression, which collapses into a constant "No" prior.
+user_turn: |-
+  {question}
+
+  Work through it in this order:
+  1. List every arrow you can see, writing it as "from X to Y" in the direction it points.
+  2. An arrow may only be travelled in the direction it points. A route that would need to go against an arrow is not allowed.
+  3. Start at the source and write down everything reachable in one step. Then extend that list by following arrows forward from anything already on it, and keep going until nothing new can be added.
+  4. If the destination ever appears on the list, the answer is yes. If the list stops growing and the destination is not on it, the answer is no.
+
+  Decide from the route you actually traced, not from how connected the picture looks overall.
+  {instruction}
+
+# 16384, not 8192: 4/20 rows capped at 8192 in the 10-sample shakedown.
+# One image (~6.2k prompt), so min_window must be declared -- resolve_budget
+# sizes the window from max_new_tokens + headroom and does not estimate
+# vision tokens, which would leave no room for the image.
+budget:
+  max_new_tokens: 16384
+  temperature: 0.6
+  do_sample: true
+min_window: 24576

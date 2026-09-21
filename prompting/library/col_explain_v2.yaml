@@ -1,0 +1,48 @@
+id: col_explain_v2
+summary: >-
+  Zero-shot graph colouring, v2 of col_explain_v1. Same domain-neutral intent -
+  identical text for the plain graph and the map - but it drops the clique step
+  and adds a read-back of the adjacency list.
+answer_style: cot
+strip_answer_cue: true
+exemplars: []
+
+# Measured behaviour of v1 on the map (Qwen3.5-4B, n=100):
+#   accuracy 0.30 against a 0.34 constant, i.e. no better than a fixed answer;
+#   a triangle claimed on 33 of 34 two-colourable maps, which is impossible;
+#   "2" answered twice in 100, though a third of golds are 2;
+#   ~49% of the adjacency lists it wrote were internally ASYMMETRIC -- region a
+#   listed b while b omitted a -- often right after it declared the list
+#   consistent. Edge COUNT was about right (median error 0); the edge SET was
+#   wrong. So the failure is attribution and bookkeeping, not over-counting.
+#
+# Two changes, both aimed at that:
+#   step 2 makes the read-back explicit, because the model believes it already
+#     checks symmetry and does not;
+#   steps 3-4 replace "find the largest group where everything connects" with a
+#     bounded try-2-then-add-one. v1's clique hunt was both combinatorial (55%
+#     truncation on the 2B) and the source of the phantom triangles.
+#
+# Deliberately NOT included: any mention of triangles, odd cycles, bipartite
+# structure, or how large the answer tends to be. Those would hand over the
+# discrimination the task is meant to measure.
+user_turn: |-
+  {question}
+
+  Work through it in this order:
+  1. For each region, write down which regions it shares a border with.
+  2. Read that list back before you use it: every pair should appear twice, once from each side. If one appears only once, you misread that border, so settle it before going on.
+  3. Try two colours. Give one region the first colour, give everything bordering it the second, and carry on across the picture. If two regions that share a border end up with the same colour, two is not enough.
+  4. When a number fails, add one more colour and try again the same way. Report the smallest number that works.
+
+  {instruction}
+
+budget:
+  max_new_tokens: 16384
+  temperature: 0.6
+  do_sample: true
+
+# One image (~6.2k prompt). resolve_budget sizes the window from
+# max_new_tokens + headroom and does not estimate vision tokens, so the window
+# has to be declared or the image would have no room.
+min_window: 24576

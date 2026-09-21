@@ -1,0 +1,43 @@
+id: col_fewshot_direct_ex3_v1
+summary: >-
+  One worked example, PINNED to the plain-graph exemplar regardless of the
+  question's variant, as the other few-shot arms are. Replaces
+  col_fewshot_direct_ex1_v1 for this task: the exemplar is the chi=2 one, and
+  its narrative demonstrates the procedure rather than asserting a clique.
+answer_style: cot
+strip_answer_cue: true
+
+# Why ex3 rather than ex1:
+#   ex1 answers 3 and ex2 answers 4, so no shipped exemplar ever reached 2 --
+#   while a third of eval golds are 2 and the models answered 2 almost never
+#   (Qwen3.5-4B: 2 in 100 on the map, 0 in 50 after the question was reworded).
+#   ex1's narrative also opens "node 2 is joined to every other node", which is
+#   exactly the clique framing that produced a triangle claim on 33 of 34
+#   two-colourable maps. ex3 instead writes the neighbour list, reads it back
+#   for symmetry, then propagates two colours and verifies every edge.
+#
+# ex3 is chi=2 by construction (target_chromatic=2; no seed in the scanned range
+# produced a bipartite graph naturally) and is not trivial: two 4-cycles plus a
+# pendant, so the two-colouring has to propagate rather than succeed on sight.
+#
+# CAUTION when reading results: moving the exemplar's answer moves the answer
+# prior, and gold is uniform over {2,3,4}, so accuracy can rise without any gain
+# in ability -- the same trap as the 4B's constant "4". Judge this arm on the
+# mechanism (adjacency-list symmetry, phantom triangles), not on accuracy alone.
+exemplars:
+  - "coloring_direct_ex3"
+
+user_turn: |-
+  {question}
+
+  Think step by step about what the image shows, then answer.
+  {instruction}
+
+budget:
+  max_new_tokens: 8192
+  temperature: 0.6
+  do_sample: true
+
+# Two images (~12.5k prompt) + 8192 generation. Fits the 4B, whose measured KV
+# cache is 30,096 tokens and whose ceiling is therefore 24576.
+min_window: 24576

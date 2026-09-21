@@ -1,0 +1,21 @@
+{
+  "prompt_id": "col_explain_v1",
+  "task": "shortest_path",
+  "variant": "direct",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: In the weighted directed acyclic graph shown, what is the minimum-weight path total from vertex 0 to vertex 4?\n\nEncoding: adjacency list. Adj[u] = [(v, w), ...] lists each neighbor v of node u and the weight w of edge (u, v).\nAdj[0] = [(1, 6)]\nAdj[1] = [(2, 6), (4, 8)]\nAdj[2] = [(3, 5)]\nAdj[3] = [(4, 9)]\nAdj[4] = []\n\nWork through it in this order:\n1. List every connection you can see, naming the two things it joins.\n2. Find the largest group in which every member is joined to every other member. If that group has k members, at least k colours are needed, because no two of them may share.\n3. Now try to colour the whole picture with exactly that many colours. If two joined things are forced to share, add one more colour and try again.\n4. Report the smallest number of colours that works.\n\nBefore settling on the group in step 2, check every pair inside it really is joined: missing one connection makes the answer come out too small.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as a single integer.",
+  "gen_kwargs": {
+    "max_new_tokens": 16384,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

@@ -1,0 +1,33 @@
+id: conn_fewshot_direct_ex1_v1
+summary: >-
+  One worked example, PINNED to the plain-graph exemplar regardless of the
+  question's variant. This is on purpose: the disguised questions are answered
+  after seeing a *direct* graph example, which probes whether the method
+  transfers across the framing. Do not "fix" this to be variant-matched.
+answer_style: cot
+strip_answer_cue: true
+
+# No {variant} placeholder: the same direct exemplar is used for both.
+exemplars:
+  - "directed_connectivity_direct_ex1"
+
+user_turn: |-
+  {question}
+
+  Think step by step about what the image shows, then answer.
+  {instruction}
+
+# 8192. This arm truncated 0/20 in the shakedown -- it never needed the
+# raise it briefly got for uniformity with the zero-shot arm, and a 16384
+# budget would need a 32768 window that the 4B cannot allocate.
+budget:
+  max_new_tokens: 8192
+  temperature: 0.6
+  do_sample: true
+
+# One exemplar image plus the document's own: ~12.5k prompt tokens. That fits a
+# 16,384 window on its own, but not alongside the 8192-token generation above,
+# so the window has to be declared here (resolve_budget does not estimate vision
+# tokens). Measured on the shortest-path arm, same render size and image count.
+# ~12.5k prompt (two images) + 8192 generation.
+min_window: 24576

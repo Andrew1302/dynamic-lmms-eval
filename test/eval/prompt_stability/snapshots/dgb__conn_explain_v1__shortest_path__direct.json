@@ -1,0 +1,21 @@
+{
+  "prompt_id": "conn_explain_v1",
+  "task": "shortest_path",
+  "variant": "direct",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: In the weighted directed acyclic graph shown, what is the minimum-weight path total from vertex 0 to vertex 4?\n\nEncoding: adjacency list. Adj[u] = [(v, w), ...] lists each neighbor v of node u and the weight w of edge (u, v).\nAdj[0] = [(1, 6)]\nAdj[1] = [(2, 6), (4, 8)]\nAdj[2] = [(3, 5)]\nAdj[3] = [(4, 9)]\nAdj[4] = []\n\nWork through it in this order:\n1. List every arrow you can see, writing it as \"from X to Y\" in the direction it points.\n2. An arrow may only be travelled in the direction it points. A route that would need to go against an arrow is not allowed.\n3. Start at the source and write down everything reachable in one step. Then extend that list by following arrows forward from anything already on it, and keep going until nothing new can be added.\n4. If the destination ever appears on the list, the answer is yes. If the list stops growing and the destination is not on it, the answer is no.\n\nDecide from the route you actually traced, not from how connected the picture looks overall.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as a single integer.",
+  "gen_kwargs": {
+    "max_new_tokens": 16384,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

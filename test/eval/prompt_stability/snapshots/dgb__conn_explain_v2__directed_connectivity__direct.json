@@ -1,0 +1,21 @@
+{
+  "prompt_id": "conn_explain_v2",
+  "task": "directed_connectivity",
+  "variant": "direct",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: Following the arrow directions, is there a directed path from node 8 to node 10?\n\nWork through it in this order:\n1. Name the two places the question asks about: where the route starts, and where it must end.\n2. From the start, look only at the connections leading away from it, in the direction they point, and write down where each one arrives.\n3. Take each new place you reached and do the same, adding only places not already on your list.\n4. Stop as soon as the destination appears on the list, or when nothing new can be added.\n\nA connection may only be followed in the direction it points; a route that travels against one does not count.\nDo not describe the whole picture. Only write down the places you can actually reach from the start.\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+  "gen_kwargs": {
+    "max_new_tokens": 8192,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

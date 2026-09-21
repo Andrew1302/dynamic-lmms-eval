@@ -1,0 +1,33 @@
+{
+  "prompt_id": "conn_fewshot_direct_ex1_v1",
+  "task": "coloring",
+  "variant": "direct",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: Following the arrow directions, is there a directed path from node 5 to node 4?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "directed_connectivity_direct_ex1.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "Start at node 5 and follow the arrows outward. The only arrow leaving node 5 goes to node 1. From node 1, the only arrow leaving goes to node 4, which is the target.\nThe route 5 to 1 to 4 travels with every arrow rather than against it, so a directed path exists.\nYes",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: What is the minimum number of colors needed to color this graph so that no two adjacent nodes share a color?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as a single integer.",
+  "gen_kwargs": {
+    "max_new_tokens": 8192,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

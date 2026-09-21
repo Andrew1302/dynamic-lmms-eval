@@ -1,0 +1,21 @@
+{
+  "prompt_id": "col_explain_v2",
+  "task": "directed_connectivity",
+  "variant": "disguise",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: Each corridor passage in this maze has an arrow showing the only allowed direction of travel. Following the arrows, is it possible to travel from the green cell to the red cell?\n\nWork through it in this order:\n1. For each region, write down which regions it shares a border with.\n2. Read that list back before you use it: every pair should appear twice, once from each side. If one appears only once, you misread that border, so settle it before going on.\n3. Try two colours. Give one region the first colour, give everything bordering it the second, and carry on across the picture. If two regions that share a border end up with the same colour, two is not enough.\n4. When a number fails, add one more colour and try again the same way. Report the smallest number that works.\n\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+  "gen_kwargs": {
+    "max_new_tokens": 16384,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

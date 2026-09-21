@@ -1,0 +1,45 @@
+id: conn_fewshot_direct_ex12_v1
+summary: >-
+  TWO worked examples - one answering Yes, one answering No - both PINNED to the
+  plain-graph exemplars regardless of the question's variant. Replaces the
+  single-exemplar arm for this task. Do not "fix" the pinning to be
+  variant-matched: answering a maze question after seeing a plain-graph example
+  is the cross-framing probe.
+answer_style: cot
+strip_answer_cue: true
+
+# Why two, for a task whose answer is Yes or No:
+#   The single-exemplar arm (conn_fewshot_direct_ex1_v1) used ex1, which answers
+#   "Yes", and swung the model to yes=7 / no=3 - while the exemplar-free control
+#   sits at no=87 / yes=13 on the same questions. One example does not just
+#   demonstrate a method on a binary task, it supplies an answer prior, and the
+#   arm inherits whichever way that example happened to land.
+#
+#   Gold is balanced (51 Yes / 49 No), so a constant answer scores ~0.51 and is
+#   indistinguishable from reasoning. Pairing a Yes example with a No example is
+#   what make_exemplars.py already intended -- "answers are also chosen to differ
+#   between a task's two exemplars, so the demonstration never teaches a constant
+#   answer" -- which only holds if both are actually shown.
+#
+#   ex1: reachable in two hops -> Yes.  ex2: every arrow at the start points
+#   inward, so nothing leaves it -> No. The pair also demonstrates that a "No"
+#   has to be earned by running out of arrows, not guessed.
+exemplars:
+  - "directed_connectivity_direct_ex1"
+  - "directed_connectivity_direct_ex2"
+
+user_turn: |-
+  {question}
+
+  Think step by step about what the image shows, then answer.
+  {instruction}
+
+budget:
+  max_new_tokens: 8192
+  temperature: 0.6
+  do_sample: true
+
+# Two exemplar images plus the document's own = 3 images, ~18.6k prompt tokens
+# (measured: a 3-image prompt was rejected at 18,602 tokens against a 16,384
+# window). 18.6k + 8192 generation needs ~27k, so the window must be declared.
+min_window: 32768
