@@ -200,14 +200,22 @@ def test_unknown_checkpoint_fails_with_a_pointer():
 
 def test_a_few_shot_prompt_grows_the_window_only_where_the_card_allows():
     """The few-shot prompt measured 18,602 tokens on the VM and overflowed a
-    16,384 window mid-run. The template now declares what it needs; a small
-    checkpoint has the KV headroom to grant it, the 4B does not and must say so
-    rather than dying inside vllm after the model has loaded."""
+    16,384 window mid-run. The template now declares what it needs, and a card
+    grants it only up to its own ceiling. That ceiling comes from the MEASURED
+    KV cache, because vllm refuses a max_model_len larger than the cache it can
+    allocate; past it the plan must say so rather than dying inside vllm after
+    the model has loaded."""
     small = build_plan(pretrained="Qwen/Qwen3.5-0.8B", thinking=False, tasks="coloring", job_name="j", prompt_id="cot_fewshot_img_v1")
     assert "max_model_len=24576" in small.model_args
 
-    with pytest.raises(BudgetError, match="needs a 24576-token window"):
-        build_plan(pretrained="Qwen/Qwen3.5-4B", thinking=False, tasks="coloring", job_name="j", prompt_id="cot_fewshot_img_v1")
+    # The 4B's KV cache measured 30,096 tokens, so a two-image prompt at 24576
+    # fits and is granted -- its few-shot arms have since run at that window.
+    four_b = build_plan(pretrained="Qwen/Qwen3.5-4B", thinking=False, tasks="coloring", job_name="j", prompt_id="cot_fewshot_img_v1")
+    assert "max_model_len=24576" in four_b.model_args
+
+    # Three images need 32768, past that ceiling, so it has to refuse.
+    with pytest.raises(BudgetError, match="needs a 32768-token window"):
+        build_plan(pretrained="Qwen/Qwen3.5-4B", thinking=False, tasks="directed_connectivity", job_name="j", prompt_id="conn_fewshot_direct_ex12_v1")
 
 
 def test_single_image_templates_do_not_grow_the_window():
