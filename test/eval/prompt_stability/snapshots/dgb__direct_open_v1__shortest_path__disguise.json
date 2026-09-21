@@ -1,0 +1,21 @@
+{
+  "prompt_id": "direct_open_v1",
+  "task": "shortest_path",
+  "variant": "disguise",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: The map of Latin America below shows several cities and the available driving routes between them. Each arrow indicates a one-way driving connection from one city to another, and is labeled with the typical driving time in hours. What is the minimum total driving time, in hours, from the start city to the end city?\n\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as a single integer.",
+  "gen_kwargs": {
+    "max_new_tokens": 8192,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

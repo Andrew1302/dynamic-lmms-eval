@@ -1,0 +1,44 @@
+id: direct_open_v1
+summary: >-
+  The control with the gag removed. Same bare question as direct_v1 and no
+  method of any kind - it just stops telling the model not to reason, and asks
+  it to finish with the answer.
+answer_style: cot
+strip_answer_cue: true
+exemplars: []
+
+# Why this arm exists.
+#
+# direct_v1 is a no-reasoning baseline enforced three ways: the stored question
+# says "Answer with a single integer and nothing else", the profile appends
+# "Reply with only the final answer and nothing else. No reasoning or
+# explanation." as reasoning_prompt, and the chat template carries
+# enable_thinking:false. Qwen3.5-4B obeys all of it - 100 of 100 responses are
+# 2-3 tokens on every task - and scores 0.07 on shortest path, because that task
+# cannot be done by inspection. The 2B ignores the text instructions on shortest
+# path, writes a 176-token enumeration, and scores 0.29. So "control" measured
+# different conditions per model, and the CoT gain was partly just the gain from
+# being allowed to reason at all.
+#
+# This template isolates that. answer_style: cot sets expects_reasoning, which is
+# what plan.py gates the terse directive on, so the profile's "no reasoning"
+# sentence is not appended. What remains is the question plus "state your final
+# answer on the last line". No steps, no procedure, no exemplar: the difference
+# between this arm and a method arm is then the METHOD, and the difference
+# between this arm and direct_v1 is PERMISSION.
+#
+# Note the terse opener is NOT part of the dataset: the stored prompt is only the
+# question and its answer cue, while "Answer with a single integer and nothing
+# else." is default_answer_spec's instruction, which direct_v1 places before the
+# question. Swapping the answer style therefore removes that too, so every
+# text-level suppressor is gone here; only enable_thinking:false remains, and that
+# is the THINKING axis rather than the prompt.
+user_turn: |-
+  {question}
+
+  {instruction}
+
+budget:
+  max_new_tokens: 8192
+  temperature: 0.6
+  do_sample: true
