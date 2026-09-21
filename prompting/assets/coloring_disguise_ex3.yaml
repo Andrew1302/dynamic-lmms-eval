@@ -1,0 +1,72 @@
+task: coloring
+variant: disguise
+seed: 900000020
+question: 'Q: How many colors are needed to color this map so that no two regions
+  sharing a land border have the same color? Regions separated by water, or touching
+  only at a single point, are not neighbors.
+
+  A:'
+answer: '2'
+authoring_adjacency: 'Q: How many colors are needed to color this map so that no two
+  regions sharing a land border have the same color? Regions separated by water, or
+  touching only at a single point, are not neighbors.
+
+
+  Adjacency list of the underlying graph:
+
+  Provided graph adjacency list.Encoding: adjacency list. Adj[u] = [v1, v2, ...] lists
+  the neighbors of node u.
+
+  Adj[0] = [2, 4]
+
+  Adj[1] = [3, 5, 6]
+
+  Adj[2] = [0, 3]
+
+  Adj[3] = [1, 2, 4]
+
+  Adj[4] = [0, 3, 6]
+
+  Adj[5] = [1]
+
+  Adj[6] = [1, 4]
+
+
+  A:'
+worked_solution: 'First I write down, for each region, the regions it shares a land
+  border with. Where two regions are separated by a channel of water rather than a
+  border, they are not neighbours, so I leave them out:
+
+  0: 2, 4
+
+  1: 3, 5, 6
+
+  2: 0, 3
+
+  3: 1, 2, 4
+
+  4: 0, 3, 6
+
+  5: 1
+
+  6: 1, 4
+
+
+  Then I read that list back to check it against itself. Every pair should appear
+  twice, once from each side: 0 lists 2 and 2 lists 0, 4 lists 6 and 6 lists 4, and
+  so on for all eight pairs. They all do, so the list is safe to use.
+
+
+  Now I try two colours. Give region 0 the first colour. The regions bordering it,
+  2 and 4, must take the second. Region 3 borders both 2 and 4, so it takes the first
+  again. Region 1 borders 3, so it takes the second, and 5 and 6, which border 1,
+  take the first. Region 6 also borders 4, which holds the second colour, so the first
+  is still fine there.
+
+
+  That leaves 0, 3, 5 and 6 on one colour and 1, 2 and 4 on the other. Checking the
+  eight borders one at a time, every border separates a region of the first colour
+  from one of the second, so no border has matching sides. Two colours are enough,
+  and one cannot work once any border exists, so the minimum is 2.
+
+  2'

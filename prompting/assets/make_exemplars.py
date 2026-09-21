@@ -42,7 +42,10 @@ VARIANTS = ("direct", "disguise")
 # to differ between a task's two exemplars, so the demonstration never teaches
 # a constant answer.
 EXEMPLAR_SEEDS = {
-    "coloring": (EXEMPLAR_SEED_BASE + 10, EXEMPLAR_SEED_BASE + 15),  # chi = 3, 4
+    # +20 is chi=2, requested via target_chromatic: no natural seed in the
+    # scanned range produced a bipartite graph, and the arm needs one because
+    # a third of eval golds are 2 while the models answer 2 almost never.
+    "coloring": (EXEMPLAR_SEED_BASE + 10, EXEMPLAR_SEED_BASE + 15, EXEMPLAR_SEED_BASE + 20),  # chi = 3, 4, 2
     "directed_connectivity": (EXEMPLAR_SEED_BASE, EXEMPLAR_SEED_BASE + 1),  # Yes, No
     "shortest_path": (EXEMPLAR_SEED_BASE, EXEMPLAR_SEED_BASE + 1),  # 15, 12
 }
@@ -62,10 +65,11 @@ def main() -> int:
     for task_name, seeds in EXEMPLAR_SEEDS.items():
         task = get_task(task_name)()
         for k, seed in enumerate(seeds):
-            plain = task.generate(seed=seed, difficulty=DIFFICULTY, config=cfg)
+            extra = {"target_chromatic": 2} if (task_name == "coloring" and seed == EXEMPLAR_SEED_BASE + 20) else {}
+            plain = task.generate(seed=seed, difficulty=DIFFICULTY, config=cfg, **extra)
             # Same seed => same graph; the adjacency dump is authoring material
             # for the narrative, never part of the exemplar prompt itself.
-            annotated = task.generate(seed=seed, difficulty=DIFFICULTY, config=cfg, include_adjacency_list=True)
+            annotated = task.generate(seed=seed, difficulty=DIFFICULTY, config=cfg, include_adjacency_list=True, **extra)
             for variant in VARIANTS:
                 stem = f"{task_name}_{variant}_ex{k + 1}"
                 plain[f"{variant}_image"].save(HERE / f"{stem}.png")
