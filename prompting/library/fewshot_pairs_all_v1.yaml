@@ -1,0 +1,31 @@
+id: fewshot_pairs_all_v1
+summary: >-
+  The three pairs of fewshot_pair_{sp,col,conn}_v1 shown together, in that
+  order: six worked examples, each graph plain then disguised.
+# Each exemplar keeps its own task's answer format (file_template.turns).
+answer_style: cot
+strip_answer_cue: true
+
+exemplars:
+  - "shortest_path_direct_ex1"
+  - "shortest_path_disguise_ex1"
+  - "coloring_direct_ex3"
+  - "coloring_disguise_ex3"
+  - "directed_connectivity_direct_ex1"
+  - "directed_connectivity_disguise_ex1"
+
+user_turn: |-
+  {question}
+
+  Think step by step about what the image shows, then answer.
+  {instruction}
+
+budget:
+  max_new_tokens: 8192
+  temperature: 0.6
+  do_sample: true
+
+# Seven images: six exemplars (~8.3k vision tokens, the shortest-path map alone
+# ~6.2k) plus the document (up to ~6.2k). ~16.5k prompt + 8192 generation needs
+# ~25.7k, over the 12 GiB cards' 24576 ceiling -- runs on the 32 GiB card only.
+min_window: 32768

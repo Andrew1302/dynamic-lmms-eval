@@ -1,0 +1,27 @@
+id: fewshot_pair_conn_v1
+summary: >-
+  Two worked examples forming one pair: the reachability exemplar drawn as a plain
+  graph, then the same graph disguised, with the same answer. Used on every
+  task, to test whether seeing one task's graph in both framings helps another.
+# Each exemplar keeps its own task's answer format (file_template.turns).
+answer_style: cot
+strip_answer_cue: true
+
+exemplars:
+  - "directed_connectivity_direct_ex1"
+  - "directed_connectivity_disguise_ex1"
+
+user_turn: |-
+  {question}
+
+  Think step by step about what the image shows, then answer.
+  {instruction}
+
+budget:
+  max_new_tokens: 8192
+  temperature: 0.6
+  do_sample: true
+
+# Three images, the largest being a shortest-path map (~6.2k tokens) when the
+# question is one: ~8k prompt + 8192 generation.
+min_window: 24576

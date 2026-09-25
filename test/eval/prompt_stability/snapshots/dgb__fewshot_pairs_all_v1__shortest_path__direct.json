@@ -1,0 +1,93 @@
+{
+  "prompt_id": "fewshot_pairs_all_v1",
+  "task": "shortest_path",
+  "variant": "direct",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: In the weighted directed acyclic graph shown, what is the minimum-weight path total from vertex 0 to vertex 3?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "shortest_path_direct_ex1.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "Two arrows leave vertex 0: one to vertex 1 costing 5, one to vertex 2 costing 8.\nThrough vertex 1: 0 to 1 is 5, then 1 to 2 is 3, then 2 to 3 is 7, giving 5 + 3 + 7 = 15.\nStraight to vertex 2: 0 to 2 is 8, then 2 to 3 is 7, giving 8 + 7 = 15.\nBoth routes reach vertex 3 at a total of 15, so the minimum is 15.\n15",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: The map of Latin America below shows several cities and the available driving routes between them. Each arrow indicates a one-way driving connection from one city to another, and is labeled with the typical driving time in hours. What is the minimum total driving time, in hours, from the start city to the end city?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "shortest_path_disguise_ex1.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "Two roads leave Tijuana, the start city: 5h to Havana and 8h to La Paz.\nVia Havana: 5h to Havana, then 3h on to La Paz, then 7h to Punta Arenas, giving 5 + 3 + 7 = 15 hours.\nStraight to La Paz: 8h, then 7h to Punta Arenas, giving 8 + 7 = 15 hours.\nBoth routes reach Punta Arenas in 15 hours, so the minimum total driving time is 15.\n15",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: What is the minimum number of colors needed to color this graph so that no two adjacent nodes share a color?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "coloring_direct_ex3.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "First I write down, for each node, the nodes joined to it by a line:\n0: 2, 4\n1: 3, 5, 6\n2: 0, 3\n3: 1, 2, 4\n4: 0, 3, 6\n5: 1\n6: 1, 4\n\nThen I read that list back to check it against itself. Every pair should appear twice, once from each side: 0 lists 2 and 2 lists 0, 4 lists 6 and 6 lists 4, and so on for all eight pairs. They all do, so the list is safe to use.\n\nNow I try two colours. Give node 0 the first colour. Its neighbours 2 and 4 must take the second. Node 3 is joined to both 2 and 4, so it takes the first again. Node 1 is joined to 3, so it takes the second, and 5 and 6, joined to 1, take the first. Node 6 is also joined to 4, which holds the second colour, so the first is still fine there.\n\nThat leaves 0, 3, 5 and 6 on one colour and 1, 2 and 4 on the other. Checking the eight lines one at a time, every line joins a node of the first colour to a node of the second, so no line has matching ends. Two colours are enough, and one cannot work once any line exists, so the minimum is 2.\n2",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: How many colors are needed to color this map so that no two regions sharing a land border have the same color? Regions separated by water, or touching only at a single point, are not neighbors.\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "coloring_disguise_ex3.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "First I write down, for each region, the regions it shares a land border with. Where two regions are separated by a channel of water rather than a border, they are not neighbours, so I leave them out:\n0: 2, 4\n1: 3, 5, 6\n2: 0, 3\n3: 1, 2, 4\n4: 0, 3, 6\n5: 1\n6: 1, 4\n\nThen I read that list back to check it against itself. Every pair should appear twice, once from each side: 0 lists 2 and 2 lists 0, 4 lists 6 and 6 lists 4, and so on for all eight pairs. They all do, so the list is safe to use.\n\nNow I try two colours. Give region 0 the first colour. The regions bordering it, 2 and 4, must take the second. Region 3 borders both 2 and 4, so it takes the first again. Region 1 borders 3, so it takes the second, and 5 and 6, which border 1, take the first. Region 6 also borders 4, which holds the second colour, so the first is still fine there.\n\nThat leaves 0, 3, 5 and 6 on one colour and 1, 2 and 4 on the other. Checking the eight borders one at a time, every border separates a region of the first colour from one of the second, so no border has matching sides. Two colours are enough, and one cannot work once any border exists, so the minimum is 2.\n2",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: Following the arrow directions, is there a directed path from node 5 to node 4?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+      "images": [
+        "directed_connectivity_direct_ex1.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "Start at node 5 and follow the arrows outward. The only arrow leaving node 5 goes to node 1. From node 1, the only arrow leaving goes to node 4, which is the target.\nThe route 5 to 1 to 4 travels with every arrow rather than against it, so a directed path exists.\nYes",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: Each corridor passage in this maze has an arrow showing the only allowed direction of travel. Following the arrows, is it possible to travel from the green cell to the red cell?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+      "images": [
+        "directed_connectivity_disguise_ex1.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "The green cell is 5 and the red cell is 4. Follow the arrows out of the green cell: the corridor leaving cell 5 leads to cell 1, and the corridor leaving cell 1 leads on to cell 4.\nEvery step is travelled in the direction its arrow allows, so the trip from the green cell to the red cell is possible.\nYes",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: In the weighted directed acyclic graph shown, what is the minimum-weight path total from vertex 0 to vertex 4?\n\nEncoding: adjacency list. Adj[u] = [(v, w), ...] lists each neighbor v of node u and the weight w of edge (u, v).\nAdj[0] = [(1, 6)]\nAdj[1] = [(2, 6), (4, 8)]\nAdj[2] = [(3, 5)]\nAdj[3] = [(4, 9)]\nAdj[4] = []\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as a single integer.",
+  "gen_kwargs": {
+    "max_new_tokens": 8192,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}

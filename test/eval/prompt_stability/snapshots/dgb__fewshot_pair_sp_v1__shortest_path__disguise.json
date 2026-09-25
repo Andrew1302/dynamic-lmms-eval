@@ -1,0 +1,45 @@
+{
+  "prompt_id": "fewshot_pair_sp_v1",
+  "task": "shortest_path",
+  "variant": "disguise",
+  "system": null,
+  "turns": [
+    {
+      "role": "user",
+      "text": "Q: In the weighted directed acyclic graph shown, what is the minimum-weight path total from vertex 0 to vertex 3?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "shortest_path_direct_ex1.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "Two arrows leave vertex 0: one to vertex 1 costing 5, one to vertex 2 costing 8.\nThrough vertex 1: 0 to 1 is 5, then 1 to 2 is 3, then 2 to 3 is 7, giving 5 + 3 + 7 = 15.\nStraight to vertex 2: 0 to 2 is 8, then 2 to 3 is 7, giving 8 + 7 = 15.\nBoth routes reach vertex 3 at a total of 15, so the minimum is 15.\n15",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: The map of Latin America below shows several cities and the available driving routes between them. Each arrow indicates a one-way driving connection from one city to another, and is labeled with the typical driving time in hours. What is the minimum total driving time, in hours, from the start city to the end city?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "shortest_path_disguise_ex1.png"
+      ]
+    },
+    {
+      "role": "assistant",
+      "text": "Two roads leave Tijuana, the start city: 5h to Havana and 8h to La Paz.\nVia Havana: 5h to Havana, then 3h on to La Paz, then 7h to Punta Arenas, giving 5 + 3 + 7 = 15 hours.\nStraight to La Paz: 8h, then 7h to Punta Arenas, giving 8 + 7 = 15 hours.\nBoth routes reach Punta Arenas in 15 hours, so the minimum total driving time is 15.\n15",
+      "images": []
+    },
+    {
+      "role": "user",
+      "text": "Q: The map of Latin America below shows several cities and the available driving routes between them. Each arrow indicates a one-way driving connection from one city to another, and is labeled with the typical driving time in hours. What is the minimum total driving time, in hours, from the start city to the end city?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "images": [
+        "<doc-image>"
+      ]
+    }
+  ],
+  "answer_instruction": "When you have finished reasoning, state your final answer on the last line as a single integer.",
+  "gen_kwargs": {
+    "max_new_tokens": 8192,
+    "temperature": 0.6,
+    "do_sample": true
+  }
+}
