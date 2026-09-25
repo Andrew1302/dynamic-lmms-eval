@@ -6,7 +6,7 @@
   "turns": [
     {
       "role": "user",
-      "text": "Q: What is the minimum number of colors needed to color this graph so that no two adjacent nodes share a color?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
+      "text": "Q: What is the minimum number of colors needed to color this graph so that no two adjacent nodes share a color?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
       "images": [
         "coloring_direct_ex3.png"
       ]

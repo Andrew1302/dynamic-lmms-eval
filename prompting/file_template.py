@@ -100,7 +100,9 @@ class FileTemplate(PromptTemplate):
         turns: list[Turn] = []
         for stem in self.exemplar_stems(doc):
             ex = load_exemplar(stem)
-            turns.append(Turn("user", self._render(ex.question, spec), images=(ex.image,)))
+            # An exemplar from another task keeps its own answer format: its
+            # worked solution ends in that task's answer, not the document's.
+            turns.append(Turn("user", self._render(ex.question, self.answer_spec(ex.task)), images=(ex.image,)))
             turns.append(Turn("assistant", ex.worked_solution))
         turns.append(Turn("user", self._render(doc["prompt"], spec), images=(DOC_IMAGE,)))
         return turns

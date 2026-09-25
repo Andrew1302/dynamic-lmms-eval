@@ -6,7 +6,7 @@
   "turns": [
     {
       "role": "user",
-      "text": "Q: Following the arrow directions, is there a directed path from node 5 to node 4?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as a single integer.",
+      "text": "Q: Following the arrow directions, is there a directed path from node 5 to node 4?\n\nThink step by step about what the image shows, then answer.\nWhen you have finished reasoning, state your final answer on the last line as only 'Yes' or 'No'.",
       "images": [
         "directed_connectivity_direct_ex1.png"
       ]
