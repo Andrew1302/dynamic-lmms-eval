@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import shlex
 import sys
 
@@ -47,6 +48,15 @@ TEXT_PROMPT_HEADROOM = 1024
 TASK_YAML_GEN_KWARGS = {"max_new_tokens": 64, "temperature": 0.0, "do_sample": False}
 
 VARIANTS = ("direct", "disguise")
+
+# The profiles are sized for the 12 GiB VM cards. A job on a larger card (the
+# 32 GiB c2d box) sets these in its conf: they change engine capacity only,
+# never the prompt or the generation budget, so results stay comparable.
+CARD_OVERRIDES = {
+    "VLLM_GPU_UTIL_OVERRIDE": ("gpu_util", float),
+    "VLLM_MAX_NUM_SEQS_OVERRIDE": ("max_num_seqs", int),
+    "VLLM_MAX_MODEL_LEN_CEILING_OVERRIDE": ("max_model_len_ceiling", int),
+}
 
 
 class BudgetError(RuntimeError):
@@ -174,8 +184,12 @@ def build_plan(
     backend_override: str | None = None,
     system_prompt: str = "internvl_r1",
     force_close: bool = True,
+    card_overrides: dict[str, str] | None = None,
 ) -> Plan:
     profile = profile_for(pretrained)
+    card = {field: cast(card_overrides[var]) for var, (field, cast) in CARD_OVERRIDES.items() if (card_overrides or {}).get(var)}
+    if card:
+        profile = dataclasses.replace(profile, **card)
     thinking = thinking or is_thinking_sku(pretrained)
     backend = backend_override or profile.backend
     template = load_template(prompt_id)
@@ -258,6 +272,7 @@ def main(argv: list[str] | None = None) -> int:
         backend_override=args.backend,
         system_prompt=args.system_prompt,
         force_close=args.force_close != "0",
+        card_overrides=dict(os.environ),
     )
     if args.format == "json":
         print(json.dumps(dataclasses.asdict(plan), indent=2))
